@@ -1,0 +1,77 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view class="hero-actions">
+      <view class="primary-btn" bindtap="onParseTap">开始识别</view>
+      <view class="secondary-btn" bindtap="onGenerateWord">生成 Word</view>
+    </view>
+  </view>
+
+  <view class="tab-bar">
+    <view class="tab-item {{activeTab === 'input' ? 'tab-item-active' : ''}}" data-tab="input" bindtap="switchTab">输入</view>
+    <view class="tab-item {{activeTab === 'preview' ? 'tab-item-active' : ''}}" data-tab="preview" bindtap="switchTab">预览</view>
+    <view class="tab-item {{activeTab === 'result' ? 'tab-item-active' : ''}}" data-tab="result" bindtap="switchTab">结果</view>
+  </view>
+
+  <view wx:if="{{activeTab === 'input'}}" class="section-card">
+    <view class="section-title">内容输入</view>
+    <view class="toolbar">
+      <view class="tool-btn" bindtap="loadExample">载入示例</view>
+      <view class="tool-btn" bindtap="clearContent">清空内容</view>
+      <view class="tool-btn primary" bindtap="onSaveDraft">保存草稿</view>
+    </view>
+    <textarea class="content-input" placeholder="把 AI 输出、Markdown、公式和代码块粘贴到这里" value="{{rawText}}" bindinput="onInputChange" maxlength="10000" auto-height="true"></textarea>
+    <view class="hint-box">
+      <view class="hint-title">识别规则</view>
+      <view class="hint-text">支持标题、列表、段落、代码块、公式块和引用块。无法识别的内容会自动降级为普通段落。</view>
+    </view>
+  </view>
+
+  <view wx:if="{{activeTab === 'preview'}}" class="section-card">
+    <view class="section-title">结构预览</view>
+    <view class="toolbar preview-toolbar">
+      <view class="tool-btn" bindtap="onParseTap">重新识别</view>
+      <view class="tool-btn primary" bindtap="onGenerateWord">生成 Word</view>
+    </view>
+    <view wx:if="{{blocks.length}}" class="doc-preview">
+      <block wx:for="{{blocks}}" wx:key="index">
+        <view wx:if="{{item.type === 'paragraph'}}" class="preview-block paragraph-block">
+          <rich-text nodes="{{item.rendered}}"></rich-text>
+        </view>
+
+        <view wx:elif="{{item.type === 'quote'}}" class="preview-block quote-block">
+          <rich-text nodes="{{item.rendered}}"></rich-text>
+        </view>
+      </block>
+    </view>
+
+    <view wx:else class="empty-state">当前没有可预览内容，请先在输入页粘贴文本并识别。</view>
+  </view>
+
+  <view wx:if="{{activeTab === 'result'}}" class="section-card">
+    <view class="section-title">生成结果</view>
+
+    <view wx:if="{{conversionStatus === 'success'}}" class="result-card success-card">
+      <view class="result-title">Word 文件已生成</view>
+      <view class="result-line">文件名：{{generatedFileName}}</view>
+      <view class="result-line">生成时间：{{generatedAt}}</view>
+      <view class="result-line">下载地址：{{downloadUrl}}</view>
+      <view class="toolbar result-toolbar">
+        <view class="tool-btn primary" bindtap="onDownload">下载文件</view>
+        <view class="tool-btn" bindtap="onParseTap">返回编辑</view>
+      </view>
+    </view>
+
+    <view wx:elif="{{conversionStatus === 'error'}}" class="result-card error-card">
+      <view class="result-title">生成失败</view>
+      <view class="result-line">{{errorMessage}}</view>
+      <view class="toolbar result-toolbar">
+        <view class="tool-btn primary" bindtap="onRetry">重试</view>
+        <view class="tool-btn" bindtap="switchTab" data-tab="input">返回输入</view>
+      </view>
+    </view>
+
+    <view wx:else class="empty-state">请先在输入页完成识别，再生成 Word。</view>
+  </view>
+
+  <view wx:if="{{draftSaved}}" class="draft-tip">草稿已保存，可继续修改后重新识别。</view>
+</view>

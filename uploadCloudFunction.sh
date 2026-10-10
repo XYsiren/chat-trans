@@ -1,1 +1,1 @@
-${installPath} cloud functions deploy --e ${envId} --n quickstartFunctions --r --project ${projectPath}
+${installPath} cloud functions deploy --e ${chat-trans-d5g21eqqd3cd2462f} --n quickstartFunctions --r --project ${projectPath}

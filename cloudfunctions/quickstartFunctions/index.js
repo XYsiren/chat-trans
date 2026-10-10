@@ -164,6 +164,126 @@ const deleteRecord = async (event) => {
 // const updateRecord = require('./updateRecord/index');
 // const fetchGoodsList = require('./fetchGoodsList/index');
 // const genMpQrcode = require('./genMpQrcode/index');
+// AI 文本转 Word 函数
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnorderedList, OrderedList, ListItem, Table, TableCell, TableRow, BorderStyle, convertInchesToTwip } = require("docx");
+
+const generateWordFromBlocks = async (blocks) => {
+  const paragraphs = [];
+
+  for (const block of blocks) {
+    if (block.type === "heading") {
+      const headingLevels = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3];
+      paragraphs.push(
+        new Paragraph({
+          text: block.content,
+          heading: headingLevels[Math.min(block.level - 1, 2)],
+          spacing: { after: 200 },
+        })
+      );
+    } else if (block.type === "paragraph") {
+      paragraphs.push(
+        new Paragraph({
+          text: block.content,
+          spacing: { after: 200 },
+        })
+      );
+    } else if (block.type === "quote") {
+      paragraphs.push(
+        new Paragraph({
+          text: block.content,
+          indent: { left: 720 },
+          border: {
+            left: {
+              color: "cccccc",
+              space: 1,
+              style: BorderStyle.SINGLE,
+              size: 12,
+            },
+          },
+          spacing: { after: 200 },
+        })
+      );
+    } else if (block.type === "code") {
+      paragraphs.push(
+        new Paragraph({
+          text: "代码块",
+          bold: true,
+          spacing: { after: 100 },
+        })
+      );
+      block.content.split("\n").forEach((line) => {
+        paragraphs.push(
+          new Paragraph({
+            text: line || " ",
+            font: "Courier New",
+            size: 20,
+            spacing: { after: 100 },
+          })
+        );
+      });
+      paragraphs.push(new Paragraph({ text: "", spacing: { after: 200 } }));
+    } else if (block.type === "formula") {
+      paragraphs.push(
+        new Paragraph({
+          text: "公式: " + block.content,
+          italics: true,
+          spacing: { after: 200 },
+        })
+      );
+    } else if (block.type === "list") {
+      const listItems = block.content.map((item) => new ListItem({ children: [new Paragraph(item)] }));
+      paragraphs.push(
+        new UnorderedList({
+          children: listItems,
+        })
+      );
+    }
+  }
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {},
+        children: paragraphs,
+      },
+    ],
+  });
+
+  const blob = await Packer.toBuffer(doc);
+  return blob;
+};
+
+const aiWordConversion = async (event) => {
+  try {
+    const { blocks } = event;
+    if (!blocks || !Array.isArray(blocks)) {
+      return { success: false, errMsg: "Invalid blocks format" };
+    }
+
+    const wordBuffer = await generateWordFromBlocks(blocks);
+
+    const timestamp = Date.now();
+    const cloudPath = `ai-word-conversion/${timestamp}.docx`;
+
+    const uploadResult = await cloud.uploadFile({
+      cloudPath: cloudPath,
+      fileContent: wordBuffer,
+    });
+
+    return {
+      success: true,
+      fileID: uploadResult.fileID,
+      fileName: `AI内容转换_${timestamp}.docx`,
+      cloudPath: cloudPath,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      errMsg: error.message || "Word 生成失败",
+    };
+  }
+};
+
 // 云函数入口函数
 exports.main = async (event, context) => {
   switch (event.type) {
@@ -181,5 +301,7 @@ exports.main = async (event, context) => {
       return await insertRecord(event);
     case "deleteRecord":
       return await deleteRecord(event);
+    case "aiWordConversion":
+      return await aiWordConversion(event);
   }
 };
