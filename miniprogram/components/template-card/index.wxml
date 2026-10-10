@@ -1,0 +1,1 @@
+<view class="row {{selected ? 'selected' : ''}}" bindtap="choose"><view><view class="name">{{template.name}}</view><view class="desc">{{template.description}}</view></view><view class="radio">{{selected ? '●' : '○'}}</view></view>

@@ -1,0 +1,8 @@
+<view class="block {{block.type}}" bindtap="tap">
+  <view wx:if="{{block.type === 'heading'}}" class="heading h{{block.level}}">{{block.content}}</view>
+  <view wx:elif="{{block.type === 'paragraph'}}" class="paragraph">{{block.content}}</view>
+  <view wx:elif="{{block.type === 'quote'}}" class="quote">{{block.content}}</view>
+  <view wx:elif="{{block.type === 'code'}}" class="code">{{block.content}}</view>
+  <view wx:elif="{{block.type === 'formula'}}" class="formula"><text class="formula-mark">公式</text><text selectable="true">{{block.content}}</text><text wx:if="{{issueCount}}" class="issue-dot">●</text></view>
+  <view wx:elif="{{block.type === 'list'}}" class="list"><view wx:for="{{block.content}}" wx:key="index"><text>{{block.ordered ? (index + 1) + '. ' : '• '}}</text>{{item}}</view></view>
+</view>

@@ -1,0 +1,1 @@
+page { --canvas:#F5F5F2; --surface:#FFF; --ink:#242424; --ink-secondary:#6E6E6A; --line:#E7E7E2; --brand:#285943; --brand-weak:#E8F0EA; --warning:#A76716; --warning-weak:#FFF4DF; --danger:#B64035; --danger-weak:#FCEBE8; --code:#F2F3F0; }

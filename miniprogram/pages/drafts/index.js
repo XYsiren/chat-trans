@@ -1,0 +1,2 @@
+const storage=require('../../services/storage-service'); const {createDraft,saveLocal}=require('../../services/document-service');
+Page({data:{drafts:[]},onShow(){this.setData({drafts:storage.list()});},create(){const d=saveLocal(createDraft());wx.navigateTo({url:`/pages/editor/index?id=${d.id}`});},open(e){wx.navigateTo({url:`/pages/editor/index?id=${e.currentTarget.dataset.id}`});},remove(e){const id=e.currentTarget.dataset.id;wx.showModal({title:'删除草稿',content:'删除后无法恢复，确定删除吗？',success:r=>{if(r.confirm){storage.remove(id);this.setData({drafts:storage.list()});}}});}});
