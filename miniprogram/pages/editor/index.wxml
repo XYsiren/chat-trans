@@ -25,6 +25,7 @@
 	</view>
 
 	<view wx:else>
+		<view wx:if="{{lastRepair}}" class="repair-tip">已应用一项修复 <text bindtap="undoRepair">撤销</text></view>
 		<view wx:if="{{draft.blocks.length}}" class="summary" bindtap="issues">
 			{{errors + warnings ? '！发现 ' + errors + ' 个需要处理的问题，' + warnings + ' 个提醒' : '✓ 内容检查完成'}}
 			<text>查看</text>

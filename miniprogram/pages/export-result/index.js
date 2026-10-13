@@ -1,4 +1,5 @@
 const storage = require('../../services/storage-service');
+const metrics = require('../../services/metrics-service');
 
 function fileName(draft) {
 	return `${(draft.title || '文档').replace(/[\\/:*?"<>|]/g, '_')}_${new Date().toISOString().slice(0, 10)}.docx`;
@@ -41,9 +42,11 @@ Page({
 				}
 				draft.status = 'exported';
 				storage.save(draft);
+			metrics.track('word_export_succeeded', { draftId: draft.id, attemptId: draft.activeAttemptId });
 				this.setData({ state: 'success', fileID: result.fileID, name: result.fileName || this.data.name });
 			})
 			.catch((error) => {
+			metrics.track('word_export_failed', { draftId: draft.id, attemptId: draft.activeAttemptId });
 				this.setData({ state: 'failed', message: error.errMsg || error.message || '暂时无法生成文档，请检查网络后重试。' });
 			});
 	},
@@ -78,7 +81,10 @@ Page({
 				wx.openDocument({
 					filePath: response.tempFilePath,
 					showMenu: true,
-					success: () => wx.showToast({ title: '已打开文件', icon: 'success' }),
+					success: () => {
+						metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId });
+						wx.showToast({ title: '已打开文件', icon: 'success' });
+					},
 					fail: (error) => wx.showModal({ title: '打开失败', content: error.errMsg || error.message || '请重新下载后再试', showCancel: false }),
 				});
 			})

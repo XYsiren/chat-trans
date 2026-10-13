@@ -3,6 +3,7 @@ const { createDraft, saveLocal, saveCloud } = require('../../services/document-s
 const { parseDocument } = require('../../utils/parser');
 const { checkHealth, score } = require('../../utils/health');
 const { TEMPLATES, MAX_SOURCE_LENGTH } = require('../../utils/constants');
+const metrics = require('../../services/metrics-service');
 
 const example = '# 文档标题\n\n这里输入正文内容。支持 Markdown 标题、列表、代码块与 LaTeX 公式。\n\n## 公式示例\n\n$$\nE = mc^2\n$$\n\n- 第一项\n- 第二项';
 
@@ -18,6 +19,7 @@ Page({
     max: MAX_SOURCE_LENGTH,
     visibleIssues: [],
     activeBlockId: '',
+    lastRepair: null,
   },
 
   onLoad(query) {
@@ -37,6 +39,16 @@ Page({
     const issues = checkHealth(draft.blocks || [], TEMPLATES.find((template) => template.id === draft.templateId), draft.dismissedIssueKeys || []);
     draft.issues = issues;
     const pendingIssues = issues.filter((item) => item.status === 'pending');
+    const metricState = draft.metrics || { shownSuggestionIds: [] };
+    draft.metrics = metricState;
+    pendingIssues.filter((item) => item.suggestion).forEach((item) => {
+      const suggestionId = `${draft.id}:${draft.revision}:${item.key}`;
+      item.suggestionId = suggestionId;
+      if (!metricState.shownSuggestionIds.includes(suggestionId)) {
+        metricState.shownSuggestionIds.push(suggestionId);
+        metrics.track('repair_suggestion_shown', { draftId: draft.id, attemptId: draft.activeAttemptId, suggestionId });
+      }
+    });
     this.setData({
       'draft.issues': issues,
       visibleIssues: pendingIssues,
@@ -89,6 +101,8 @@ Page({
     draft.blocks = parseDocument(text);
     draft.revision++;
     draft.status = 'editing';
+    draft.activeAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    metrics.track('document_processing_started', { draftId: draft.id, attemptId: draft.activeAttemptId, blockCount: draft.blocks.length, formulaCount: draft.blocks.filter((block) => block.type === 'formula').length });
     this.setData({ draft, sourceDirty: false, tab: 'preview' });
     this.refresh(draft);
     wx.showToast({ title: '结构识别完成', icon: 'success' });
@@ -153,6 +167,7 @@ Page({
     if (!keys.includes(issue.key)) keys.push(issue.key);
     this.data.draft.dismissedIssueKeys = keys;
     issue.status = 'rejected';
+    metrics.track('repair_suggestion_dismissed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId, suggestionId: issue.suggestionId || issue.key });
     this.refresh(this.data.draft);
     this.setData({ panel: true });
     wx.showToast({ title: '本次内容不再提示', icon: 'none' });
@@ -174,11 +189,26 @@ Page({
       return;
     }
 
+    const repairId = `repair_${this.data.draft.id}_${this.data.draft.revision}_${issue.key}`;
+    const sourceBefore = source;
     this.data.draft.sourceText = `${source.slice(0, range.start)}${part.slice(0, index)}${issue.suggestion.after}${part.slice(index + issue.suggestion.before.length)}${source.slice(range.end)}`;
     this.data.draft.blocks = parseDocument(this.data.draft.sourceText);
     this.data.draft.revision++;
     this.refresh(this.data.draft);
-    this.setData({ draft: this.data.draft, panel: true, sourceDirty: false });
+    metrics.track('repair_suggestion_accepted', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId, suggestionId: issue.suggestionId || issue.key, repairId });
+    this.setData({ draft: this.data.draft, panel: true, sourceDirty: false, lastRepair: { sourceBefore, repairId } });
     wx.showToast({ title: '已完成修复', icon: 'success' });
+  },
+
+  undoRepair() {
+    const repair = this.data.lastRepair;
+    if (!repair) return;
+    this.data.draft.sourceText = repair.sourceBefore;
+    this.data.draft.blocks = parseDocument(repair.sourceBefore);
+    this.data.draft.revision++;
+    metrics.track('repair_undone', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId, repairId: repair.repairId });
+    this.refresh(this.data.draft);
+    this.setData({ draft: this.data.draft, lastRepair: null, sourceDirty: false });
+    wx.showToast({ title: '已撤销修复', icon: 'none' });
   },
 });

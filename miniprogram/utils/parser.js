@@ -46,8 +46,51 @@ function normalizeLatex(source) {
 }
 
 function formulaPreview(latex) {
-  // 当前未接入 TeX 渲染器，预览保留原始 LaTeX，绝不以“好看”为由丢失语义。
-  return normalizeLatex(latex).replace(/\s*\n\s*/g, ' ');
+  // `content` 始终保留 LaTeX；这里只生成小程序内的可读预览文本。
+  // 小程序原生 rich-text 不具备 TeX 排版能力，不能把 LaTeX 原样直接展示给用户。
+  let value = normalizeLatex(latex).replace(/\s*\n\s*/g, ' ');
+
+  // 先展开最内层的分式和文字命令，循环可处理有限层嵌套。
+  for (let i = 0; i < 6; i += 1) {
+    const next = value
+      .replace(/\\(?:dfrac|tfrac|cfrac|frac)\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)')
+      .replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
+      .replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\{([^{}]*)\}/g, '$1');
+    if (next === value) break;
+    value = next;
+  }
+
+  const symbols = [
+    ['\\\\left', ''], ['\\\\right', ''], ['\\\\bigg', ''], ['\\\\Bigg', ''], ['\\\\big', ''], ['\\\\Big', ''],
+    ['\\\\langle', '⟨'], ['\\\\rangle', '⟩'], ['\\\\lceil', '⌈'], ['\\\\rceil', '⌉'], ['\\\\lfloor', '⌊'], ['\\\\rfloor', '⌋'],
+    ['\\\\bigcup', '⋃'], ['\\\\bigcap', '⋂'], ['\\\\sum', '∑'], ['\\\\prod', '∏'], ['\\\\int', '∫'],
+    ['\\\\exists', '∃'], ['\\\\forall', '∀'], ['\\\\emptyset', '∅'], ['\\\\infty', '∞'], ['\\\\partial', '∂'],
+    ['\\\\subseteq', '⊆'], ['\\\\supseteq', '⊇'], ['\\\\subset', '⊂'], ['\\\\supset', '⊃'], ['\\\\notin', '∉'], ['\\\\in', '∈'],
+    ['\\\\leq', '≤'], ['\\\\geq', '≥'], ['\\\\le', '≤'], ['\\\\ge', '≥'], ['\\\\neq', '≠'], ['\\\\ne', '≠'], ['\\\\approx', '≈'],
+    ['\\\\cdots', '⋯'], ['\\\\ldots', '…'], ['\\\\dots', '…'], ['\\\\times', '×'], ['\\\\cdot', '·'], ['\\\\cap', '∩'], ['\\\\cup', '∪'],
+    ['\\\\to', '→'], ['\\\\rightarrow', '→'], ['\\\\leftarrow', '←'], ['\\\\mid', '|'], ['\\\\vert', '|'], ['\\\\|', '|'],
+    ['\\\\alpha', 'α'], ['\\\\beta', 'β'], ['\\\\gamma', 'γ'], ['\\\\delta', 'δ'], ['\\\\lambda', 'λ'], ['\\\\mu', 'μ'], ['\\\\pi', 'π'], ['\\\\sigma', 'σ'], ['\\\\omega', 'ω'],
+  ];
+  // 用字面量替换，不能把 LaTeX 反斜杠交给 RegExp 再解释；例如 `\\|` 会被正则当作“空匹配”。
+  symbols.forEach(([from, to]) => { value = value.split(from).join(to); });
+
+  // 兼容基础库对字符串反斜杠的差异：这里用明确的正则兜底替换所有常见命令。
+  value = value
+    .replace(/\\bigcup/g, '⋃').replace(/\\bigcap/g, '⋂')
+    .replace(/\\left|\\right|\\bigg|\\Bigg|\\big|\\Big/g, '')
+    .replace(/\\langle/g, '⟨').replace(/\\rangle/g, '⟩')
+    .replace(/\\sum/g, '∑').replace(/\\prod/g, '∏').replace(/\\int/g, '∫')
+    .replace(/\\exists/g, '∃').replace(/\\forall/g, '∀').replace(/\\emptyset/g, '∅').replace(/\\infty/g, '∞')
+    .replace(/\\subseteq/g, '⊆').replace(/\\supseteq/g, '⊇').replace(/\\subset/g, '⊂').replace(/\\supset/g, '⊃').replace(/\\notin/g, '∉').replace(/\\in/g, '∈')
+    .replace(/\\leq|\\le/g, '≤').replace(/\\geq|\\ge/g, '≥').replace(/\\neq|\\ne/g, '≠')
+    .replace(/\\cdots/g, '⋯').replace(/\\ldots|\\dots/g, '…').replace(/\\cap/g, '∩').replace(/\\cup/g, '∪')
+    .replace(/\\,/g, ' ').replace(/\\\|/g, '|').replace(/\\\{/g, '{').replace(/\\\}/g, '}');
+
+  // 清理 TeX 分组和空白控制符。下标/上标保留结构，以免复杂下标被错误篡改。
+  return value
+    .replace(/\\[,!;:\s]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function renderInline(source) {
