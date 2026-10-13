@@ -31,6 +31,11 @@ Page({
   },
 
   load(draft) {
+    // 旧草稿会缓存早期版本的 displayText/rendered；升级解析器后若直接使用缓存，
+    // 预览仍会显示 \frac、\dots 等源码。以原始输入为唯一来源重新生成展示块。
+    if (draft && String(draft.sourceText || '').trim()) {
+      draft.blocks = parseDocument(draft.sourceText);
+    }
     this.setData({ draft, sourceDirty: false });
     this.refresh(draft);
   },

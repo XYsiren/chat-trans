@@ -32,6 +32,8 @@ const headingLevels = [
  */
 function formulaText(latex) {
 	let value = String(latex || '').replace(/\r\n?/g, ' ').trim();
+	// 必须在 \le 等短命令转换前移除尺寸控制命令，否则 \left 会被误识别为 \le + ft。
+	value = value.replace(/\\left|\\right|\\bigg|\\Bigg|\\big(?!cup|cap)|\\Big/g, '');
 	// 展开常见的嵌套分式。有限循环可避免不受控的正则替换。
 	for (let i = 0; i < 8; i += 1) {
 		const next = value
@@ -45,21 +47,24 @@ function formulaText(latex) {
 
 	const commands = [
 		['\\Rightarrow', '⇒'], ['\\rightarrow', '→'], ['\\leftarrow', '←'],
+		['\\langle', '⟨'], ['\\rangle', '⟩'], ['\\lceil', '⌈'], ['\\rceil', '⌉'],
 		['\\times', '×'], ['\\cdot', '·'], ['\\leq', '≤'], ['\\geq', '≥'],
 		['\\neq', '≠'], ['\\ne', '≠'], ['\\le', '≤'], ['\\ge', '≥'],
-		['\\pm', '±'], ['\\infty', '∞'], ['\\sum', '∑'], ['\\prod', '∏'], ['\\int', '∫'],
-		['\\forall', '∀'], ['\\exists', '∃'], ['\\in', '∈'], ['\\cup', '∪'], ['\\cap', '∩'],
+		['\\pm', '±'], ['\\infty', '∞'], ['\\bigcup', '⋃'], ['\\bigcap', '⋂'], ['\\sum', '∑'], ['\\prod', '∏'], ['\\int', '∫'],
+		['\\forall', '∀'], ['\\exists', '∃'], ['\\emptyset', '∅'], ['\\notin', '∉'], ['\\in', '∈'], ['\\cup', '∪'], ['\\cap', '∩'],
+		['\\cdots', '⋯'], ['\\ldots', '…'], ['\\dots', '…'],
 		['\\alpha', 'α'], ['\\beta', 'β'], ['\\gamma', 'γ'], ['\\delta', 'δ'], ['\\theta', 'θ'],
 	];
 	commands.forEach(([from, to]) => { value = value.split(from).join(to); });
 	value = value
-		.replace(/\\left|\\right|\\bigg|\\Bigg|\\big|\\Big/g, '')
 		.replace(/\\[,!;:\s]+/g, ' ')
 		.replace(/\\([{}])/g, '$1');
 
 	// H_{out} / x^2 转为 Unicode 上下标；多字符上下标不会因删除花括号而丢失。
 	value = value.replace(/_\{([^{}]+)\}/g, (_, subscript) => `₍${subscript}₎`);
 	value = value.replace(/\^\{([^{}]+)\}/g, (_, superscript) => `^(${superscript})`);
+	value = value.replace(/_([A-Za-z0-9])/g, (_, subscript) => `₍${subscript}₎`);
+	value = value.replace(/\^([A-Za-z0-9])/g, (_, superscript) => `^(${superscript})`);
 	return value.replace(/[{}]/g, '').replace(/\s+/g, ' ').trim() || '[空公式]';
 }
 

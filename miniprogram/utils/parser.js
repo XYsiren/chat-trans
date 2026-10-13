@@ -68,7 +68,8 @@ function formulaPreview(latex) {
   // 先展开最内层的分式和文字命令，循环可处理有限层嵌套。
   for (let i = 0; i < 6; i += 1) {
     const next = value
-      .replace(/\\(?:dfrac|tfrac|cfrac|frac)\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)')
+      // 分式内经常出现 H_{in} 这类一层嵌套的下标，不能只匹配纯文本参数。
+      .replace(/\\(?:dfrac|tfrac|cfrac|frac)\{((?:[^{}]|\{[^{}]*\})*)\}\{((?:[^{}]|\{[^{}]*\})*)\}/g, '($1)/($2)')
       .replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
       .replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\{([^{}]*)\}/g, '$1');
     if (next === value) break;
