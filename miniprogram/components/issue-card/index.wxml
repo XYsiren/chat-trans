@@ -1,7 +1,7 @@
 <view class="card {{issue.severity}}" bindtap="focus">
 	<view class="top">
 		<text>{{issue.severity === 'error' ? '需要处理' : '提醒'}}</text>
-		<text class="category">{{issue.category}}</text>
+		<text class="category">{{issue.category === 'formula' ? '公式' : issue.category === 'structure' ? '结构' : issue.category === 'placeholder' ? '内容' : '检查项'}}</text>
 	</view>
 	<view class="message">{{issue.message}}</view>
 	<view wx:if="{{issue.suggestion}}" class="compare">
@@ -9,7 +9,8 @@
 		<view>建议 {{issue.suggestion.after}}</view>
 	</view>
 	<view class="actions">
-		<view class="ignore" catchtap="reject">忽略</view>
-		<view wx:if="{{issue.suggestion}}" class="accept" catchtap="accept">采用</view>
+		<view class="locate" catchtap="focus">查看位置</view>
+		<view class="ignore" catchtap="reject">暂不提示</view>
+		<view wx:if="{{issue.suggestion}}" class="accept" catchtap="accept">一键修复</view>
 	</view>
 </view>

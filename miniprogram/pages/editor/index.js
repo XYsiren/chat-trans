@@ -34,7 +34,7 @@ Page({
   },
 
   refresh(draft) {
-    const issues = checkHealth(draft.blocks || [], TEMPLATES.find((template) => template.id === draft.templateId));
+    const issues = checkHealth(draft.blocks || [], TEMPLATES.find((template) => template.id === draft.templateId), draft.dismissedIssueKeys || []);
     draft.issues = issues;
     const pendingIssues = issues.filter((item) => item.status === 'pending');
     this.setData({
@@ -149,9 +149,13 @@ Page({
   reject(event) {
     const issue = this.data.draft.issues.find((item) => item.id === event.detail.issueId);
     if (!issue) return;
+    const keys = this.data.draft.dismissedIssueKeys || [];
+    if (!keys.includes(issue.key)) keys.push(issue.key);
+    this.data.draft.dismissedIssueKeys = keys;
     issue.status = 'rejected';
     this.refresh(this.data.draft);
     this.setData({ panel: true });
+    wx.showToast({ title: '本次内容不再提示', icon: 'none' });
   },
 
   accept(event) {
@@ -159,12 +163,22 @@ Page({
     if (!issue || !issue.suggestion) return;
 
     const block = this.data.draft.blocks.find((item) => item.id === issue.blockId);
-    if (block && block.content === issue.suggestion.before) {
-      block.content = issue.suggestion.after;
-      issue.status = 'accepted';
-      this.data.draft.revision++;
-      this.refresh(this.data.draft);
-      this.setData({ panel: true });
+    if (!block || block.content !== issue.suggestion.before) return;
+
+    const range = block.sourceRange || {};
+    const source = this.data.draft.sourceText || '';
+    const part = source.slice(range.start, range.end);
+    const index = part.indexOf(issue.suggestion.before);
+    if (index < 0) {
+      wx.showToast({ title: '内容已变化，请重新识别', icon: 'none' });
+      return;
     }
+
+    this.data.draft.sourceText = `${source.slice(0, range.start)}${part.slice(0, index)}${issue.suggestion.after}${part.slice(index + issue.suggestion.before.length)}${source.slice(range.end)}`;
+    this.data.draft.blocks = parseDocument(this.data.draft.sourceText);
+    this.data.draft.revision++;
+    this.refresh(this.data.draft);
+    this.setData({ draft: this.data.draft, panel: true, sourceDirty: false });
+    wx.showToast({ title: '已完成修复', icon: 'success' });
   },
 });
