@@ -161,10 +161,18 @@ Page({
 		wx.showLoading({ title: "正在生成 Word..." });
 		wx.cloud
 			.callFunction({
-				name: "quickstartFunctions",
+				name: "generateWord",
 				data: {
-					type: "aiWordConversion",
-					blocks: this.data.blocks,
+					draft: {
+						id: `legacy_${Date.now()}`,
+						title: "AI内容转换",
+						blocks: this.data.blocks.map((block) => ({
+							type: block.type,
+							content: block.content,
+							level: block.level,
+							ordered: block.ordered,
+						})),
+					},
 				},
 			})
 			.then((resp) => {

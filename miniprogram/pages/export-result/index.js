@@ -29,10 +29,9 @@ Page({
 
 		wx.cloud
 			.callFunction({
-				name: 'quickstartFunctions',
+				name: 'generateWord',
 				data: {
-					type: 'aiWordConversion',
-					blocks: draft.blocks,
+					draft,
 				},
 			})
 			.then((response) => {

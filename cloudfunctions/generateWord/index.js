@@ -12,6 +12,7 @@ const {
 	TableCell,
 	WidthType,
 } = require('docx');
+const { Math: WordMath, latexToMath } = require('docx/math');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -23,6 +24,15 @@ const headingLevels = [
 	HeadingLevel.HEADING_3,
 	HeadingLevel.HEADING_3,
 ];
+
+function mathRun(latex) {
+	try {
+		return new WordMath({ children: latexToMath(String(latex || '').trim()) });
+	} catch (error) {
+		// 不把失败公式伪装成正常排版；保留原始源码供用户在 Word 中核对。
+		return new TextRun({ text: `[公式未转换: ${String(latex || '').trim()}]`, italics: true, color: 'B64035' });
+	}
+}
 
 function inlineRuns(text) {
 	const source = String(text || '').replace(/\r\n?/g, ' ');
@@ -43,13 +53,13 @@ function inlineRuns(text) {
 		} else if (token.startsWith('`')) {
 			runs.push(new TextRun({ text: token.slice(1, -1), font: 'Courier New' }));
 		} else if (token.startsWith('$$')) {
-			runs.push(new TextRun({ text: token.slice(2, -2), italics: true, color: '666666' }));
+			runs.push(mathRun(token.slice(2, -2)));
 		} else if (token.startsWith('\\(')) {
-			runs.push(new TextRun({ text: token.slice(2, -2), italics: true, color: '666666' }));
+			runs.push(mathRun(token.slice(2, -2)));
 		} else if (token.startsWith('\\[')) {
-			runs.push(new TextRun({ text: token.slice(2, -2), italics: true, color: '666666' }));
+			runs.push(mathRun(token.slice(2, -2)));
 		} else if (token.startsWith('$')) {
-			runs.push(new TextRun({ text: token.slice(1, -1), italics: true, color: '666666' }));
+			runs.push(mathRun(token.slice(1, -1)));
 		}
 
 		lastIndex = pattern.lastIndex;
@@ -104,7 +114,7 @@ function paragraphForBlock(block) {
 
 	if (block.type === 'formula') {
 		return new Paragraph({
-			children: [new TextRun({ text: String(block.content || ''), italics: true, color: '666666' })],
+			children: [mathRun(block.content)],
 			alignment: AlignmentType.CENTER,
 			spacing: { after: 200 },
 		});
