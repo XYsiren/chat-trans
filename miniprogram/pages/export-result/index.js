@@ -76,9 +76,21 @@ Page({
 				if (!response.tempFilePath) {
 					throw new Error('文件下载失败');
 				}
+				const savedPath = `${wx.env.USER_DATA_PATH}/${this.data.name}`;
+				return new Promise((resolve) => {
+					wx.getFileSystemManager().saveFile({
+						tempFilePath: response.tempFilePath,
+						filePath: savedPath,
+						success: (result) => resolve(result.savedFilePath || savedPath),
+						// 文件名保存失败时仍可打开临时文件，避免阻断用户下载。
+						fail: () => resolve(response.tempFilePath),
+					});
+				});
+			})
+			.then((filePath) => {
 				wx.hideLoading();
 				wx.openDocument({
-					filePath: response.tempFilePath,
+					filePath,
 					showMenu: true,
 					success: () => {
 						metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId });

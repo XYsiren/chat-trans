@@ -185,7 +185,10 @@ exports.main = async (event) => {
 
 	const buffer = await Packer.toBuffer(new Document({ sections: [{ children }] }));
 	const openid = cloud.getWXContext().OPENID;
-	const name = `${String(d.title || '文档').replace(/[\\/:*?"<>|]/g, '_')}_${Date.now()}.docx`;
-	const upload = await cloud.uploadFile({ cloudPath: `${openid}/${d.id}/${name}`, fileContent: buffer });
-	return { success: true, fileID: upload.fileID, fileName: name };
+	const safeTitle = String(d.title || '未命名文档').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名文档';
+	const fileName = `${safeTitle}.docx`;
+	// 云端路径仍带时间戳以避免同名文档覆盖；只把友好的文件名返回给前端。
+	const cloudPath = `${openid}/${d.id}/${Date.now()}_${fileName}`;
+	const upload = await cloud.uploadFile({ cloudPath, fileContent: buffer });
+	return { success: true, fileID: upload.fileID, fileName };
 };

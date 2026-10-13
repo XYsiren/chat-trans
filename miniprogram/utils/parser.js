@@ -24,6 +24,21 @@ function isStandaloneSingleDollar(line) {
   return !!expr && !/^\d+(?:[,.]\d{1,2})?$/.test(expr);
 }
 
+function bareMathContent(line) {
+  const source = line.trim().replace(/[；。]$/, '').trim();
+  if (!source || /[\u4e00-\u9fff]/.test(source)) return null;
+  const hasLatex = /\\(?:frac|dfrac|tfrac|sqrt|sum|prod|int|times|cdot|leq?|geq?|Rightarrow|rightarrow|leftarrow|boldsymbol|mathbf|mathit|mathrm|in|cap|cup|;)/.test(source);
+  const looksLikeEquation = /[=_^]/.test(source) && /^[A-Za-z0-9_{}^\\.,;:+\-*/=<>()[\]\s]+$/.test(source);
+  return hasLatex || looksLikeEquation ? source : null;
+}
+
+function wrapBareInlineVariables(source) {
+  const text = String(source || '');
+  // 含已有数学分隔符时不再二次包裹，避免破坏用户写好的公式。
+  if (/\\\(|\\\[|\$/.test(text)) return text;
+  return text.replace(/\b(?:[A-Za-z]_\{[A-Za-z][A-Za-z0-9]*\}\s*=\s*[A-Za-z]_\{[A-Za-z][A-Za-z0-9]*\}|[A-Za-z]_\{[A-Za-z][A-Za-z0-9]*\})/g, (match) => `\\(${match}\\)`);
+}
+
 /**
  * 只做确定、等价的兼容性替换。不得将 LaTeX 命令替换成普通字符，
  * 否则会破坏后续 MathML/OMML 转换所需的语义。
@@ -174,6 +189,12 @@ function parseDocument(source) {
       blocks.push(formulaBlock(trimmed.slice(1, -1), start, blockEnd(i), true, '$')); i += 1; continue;
     }
 
+    // 大模型常省略 $...$ 分隔符；当一整行只包含数学字符/LaTeX 命令时，识别为公式块。
+    const bareFormula = bareMathContent(line);
+    if (bareFormula) {
+      blocks.push(formulaBlock(bareFormula, start, blockEnd(i), true, 'bare-latex')); i += 1; continue;
+    }
+
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       blocks.push(make('heading', heading[2], start, blockEnd(i), { level: heading[1].length, rendered: renderInline(heading[2]) })); i += 1; continue;
@@ -188,7 +209,7 @@ function parseDocument(source) {
     if (listLine(line)) {
       const rows = []; const renderedItems = []; const ordered = /^\s*\d+[.)]\s+/.test(line); const first = i;
       while (i < lines.length && listLine(lines[i])) {
-        const item = lines[i].replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, ''); rows.push(item); renderedItems.push(renderInline(item)); i += 1;
+        const item = wrapBareInlineVariables(lines[i].replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, '')); rows.push(item); renderedItems.push(renderInline(item)); i += 1;
       }
       blocks.push(make('list', rows, start, blockEnd(i - 1), { ordered, renderedItems })); continue;
     }
@@ -196,12 +217,12 @@ function parseDocument(source) {
     const rows = [line.trim()]; const first = i; i += 1;
     while (i < lines.length) {
       const next = lines[i];
-      if (!next.trim() || isCodeFence(next) || isMathFence(next) || /^(\$\$|\\\[|\\\()/.test(next.trim()) || isStandaloneSingleDollar(next) || /^#{1,6}\s+/.test(next) || /^\s*>/.test(next) || listLine(next)) break;
+      if (!next.trim() || isCodeFence(next) || isMathFence(next) || /^(\$\$|\\\[|\\\()/.test(next.trim()) || isStandaloneSingleDollar(next) || bareMathContent(next) || /^#{1,6}\s+/.test(next) || /^\s*>/.test(next) || listLine(next)) break;
       rows.push(next.trim()); i += 1;
     }
-    const content = rows.join('\n'); blocks.push(make('paragraph', content, start, blockEnd(i - 1), { rendered: renderInline(content) }));
+    const content = wrapBareInlineVariables(rows.join('\n')); blocks.push(make('paragraph', content, start, blockEnd(i - 1), { rendered: renderInline(content) }));
   }
   return blocks;
 }
 
-module.exports = { parseDocument, renderInline, normalizeLatex, formulaPreview };
+module.exports = { parseDocument, renderInline, normalizeLatex, formulaPreview, bareMathContent };
