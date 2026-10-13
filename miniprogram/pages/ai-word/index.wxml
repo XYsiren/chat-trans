@@ -34,12 +34,31 @@
     </view>
     <view wx:if="{{blocks.length}}" class="doc-preview">
       <block wx:for="{{blocks}}" wx:key="index">
-        <view wx:if="{{item.type === 'paragraph'}}" class="preview-block paragraph-block">
+        <view wx:if="{{item.type === 'heading'}}" class="preview-block heading-block h{{item.level}}">
+          <rich-text nodes="{{item.rendered}}"></rich-text>
+        </view>
+
+        <view wx:elif="{{item.type === 'paragraph'}}" class="preview-block paragraph-block">
           <rich-text nodes="{{item.rendered}}"></rich-text>
         </view>
 
         <view wx:elif="{{item.type === 'quote'}}" class="preview-block quote-block">
           <rich-text nodes="{{item.rendered}}"></rich-text>
+        </view>
+
+        <view wx:elif="{{item.type === 'list'}}" class="preview-block list-block">
+          <view wx:for="{{item.renderedItems}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex" class="list-row">
+            <text class="list-bullet">{{item.ordered ? (listIndex + 1) + '. ' : '• '}}</text>
+            <rich-text nodes="{{listItem}}"></rich-text>
+          </view>
+        </view>
+
+        <view wx:elif="{{item.type === 'code'}}" class="preview-block code-block">
+          <text selectable="true" class="code-text">{{item.renderedText}}</text>
+        </view>
+
+        <view wx:elif="{{item.type === 'formula'}}" class="preview-block formula-block">
+          <text selectable="true" class="formula-text">{{item.displayText || item.content}}</text>
         </view>
       </block>
     </view>

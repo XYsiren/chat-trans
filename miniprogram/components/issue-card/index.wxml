@@ -1,1 +1,15 @@
-<view class="card {{issue.severity}}"><view class="top"><text>{{issue.severity === 'error' ? '需要处理' : '提醒'}}</text><text>{{issue.category}}</text></view><view class="message">{{issue.message}}</view><view wx:if="{{issue.suggestion}}" class="compare"><view>原内容 {{issue.suggestion.before}}</view><view>建议 {{issue.suggestion.after}}</view></view><view class="actions"><text class="ignore" bindtap="reject">忽略</text><text wx:if="{{issue.suggestion}}" class="accept" bindtap="accept">采用</text></view></view>
+<view class="card {{issue.severity}}" bindtap="focus">
+	<view class="top">
+		<text>{{issue.severity === 'error' ? '需要处理' : '提醒'}}</text>
+		<text class="category">{{issue.category}}</text>
+	</view>
+	<view class="message">{{issue.message}}</view>
+	<view wx:if="{{issue.suggestion}}" class="compare">
+		<view>原内容 {{issue.suggestion.before}}</view>
+		<view>建议 {{issue.suggestion.after}}</view>
+	</view>
+	<view class="actions">
+		<view class="ignore" catchtap="reject">忽略</view>
+		<view wx:if="{{issue.suggestion}}" class="accept" catchtap="accept">采用</view>
+	</view>
+</view>

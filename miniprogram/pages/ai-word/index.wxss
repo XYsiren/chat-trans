@@ -170,11 +170,80 @@ page {
   color: rgba(15, 23, 42, 0.9);
 }
 
+.heading-block {
+  margin-bottom: 18rpx;
+  color: #111827;
+}
+
+.heading-block.h1 {
+  font-size: 40rpx;
+  line-height: 56rpx;
+  font-weight: 700;
+}
+
+.heading-block.h2 {
+  font-size: 34rpx;
+  line-height: 50rpx;
+  font-weight: 700;
+}
+
+.heading-block.h3,
+.heading-block.h4,
+.heading-block.h5,
+.heading-block.h6 {
+  font-size: 30rpx;
+  line-height: 46rpx;
+  font-weight: 600;
+}
+
 .quote-block {
   padding: 18rpx 20rpx;
   background: #f8fafc;
   border-left: 6rpx solid #111827;
   border-radius: 16rpx;
+}
+
+.list-block {
+  margin-bottom: 18rpx;
+}
+
+.list-row {
+  display: flex;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
+  font-size: 28rpx;
+  line-height: 46rpx;
+  color: rgba(15, 23, 42, 0.9);
+}
+
+.list-bullet {
+  flex: none;
+  color: #111827;
+}
+
+.code-block {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 18rpx;
+  padding: 20rpx 22rpx;
+  margin-bottom: 18rpx;
+}
+
+.code-text {
+  display: block;
+  white-space: pre-wrap;
+  font-size: 24rpx;
+  line-height: 38rpx;
+  font-family: monospace;
+}
+
+.formula-block {
+  margin-bottom: 18rpx;
+  padding: 16rpx 20rpx;
+  background: #f8fafc;
+  border-radius: 16rpx;
+  color: #0f172a;
+  text-align: center;
 }
 
 .inline-code {
@@ -193,6 +262,15 @@ page {
 
 .inline-em {
   display: inline;
+  font-style: italic;
+}
+
+.inline-formula {
+  display: inline;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  background: rgba(17, 24, 39, 0.08);
+  color: #111827;
   font-style: italic;
 }
 

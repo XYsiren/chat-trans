@@ -1,3 +1,170 @@
-const storage=require('../../services/storage-service'); const {createDraft,saveLocal,saveCloud}=require('../../services/document-service'); const {parseDocument}=require('../../utils/parser'); const {checkHealth,score}=require('../../utils/health'); const {TEMPLATES,MAX_SOURCE_LENGTH}=require('../../utils/constants');
-const example='# 文档标题\n\n这里输入正文内容。支持 Markdown 标题、列表、代码块与 LaTeX 公式。\n\n## 公式示例\n\n$$\nE = mc^2\n$$\n\n- 第一项\n- 第二项';
-Page({data:{draft:null,tab:'edit',sourceDirty:false,panel:false,score:100,errors:0,warnings:0,max:MAX_SOURCE_LENGTH},onLoad(q){let d=q.id&&storage.get(q.id);if(!d){d=saveLocal(createDraft());}this.load(d);},load(d){this.setData({draft:d,sourceDirty:false});this.refresh(d);},refresh(d){const issues=checkHealth(d.blocks||[],TEMPLATES.find(t=>t.id===d.templateId));d.issues=issues;const errors=issues.filter(x=>x.severity==='error'&&x.status==='pending').length;this.setData({'draft.issues':issues,score:score(issues),errors,warnings:issues.filter(x=>x.severity==='warning'&&x.status==='pending').length});saveLocal(d);},input(e){const value=e.detail.value;this.setData({'draft.sourceText':value,sourceDirty:true});clearTimeout(this.saveTimer);this.saveTimer=setTimeout(()=>saveLocal(this.data.draft),800);},title(e){this.setData({'draft.title':e.detail.value||'未命名文档'});},save(){saveCloud(this.data.draft).then(()=>wx.showToast({title:'草稿已保存',icon:'success'}));},example(){this.setData({'draft.sourceText':example,sourceDirty:true});},clear(){wx.showModal({title:'清空内容',content:'确定清空当前输入内容吗？',success:r=>{if(r.confirm)this.setData({'draft.sourceText':'',sourceDirty:true});}});},parse(){const text=(this.data.draft.sourceText||'').trim();if(!text){wx.showToast({title:'请先填写内容',icon:'none'});return;}const d=this.data.draft;d.blocks=parseDocument(text);d.revision++;d.status='editing';this.setData({draft:d,sourceDirty:false,tab:'preview'});this.refresh(d);wx.showToast({title:'结构识别完成',icon:'success'});},switch(e){this.setData({tab:e.currentTarget.dataset.tab});},issues(){if(!this.data.draft.blocks.length){wx.showToast({title:'请先识别内容',icon:'none'});return;}this.setData({panel:true});},close(){this.setData({panel:false});},noop(){},next(){if(this.data.sourceDirty||!this.data.draft.blocks.length)return;saveLocal(this.data.draft);wx.navigateTo({url:`/pages/template-select/index?id=${this.data.draft.id}`});},focus(e){const b=this.data.draft.blocks.find(x=>x.id===e.detail.blockId);if(b){this.setData({tab:'edit'});wx.showToast({title:'请在原文中修改对应内容',icon:'none'});}},reject(e){const issue=this.data.draft.issues.find(x=>x.id===e.detail.issueId);if(issue){issue.status='rejected';this.setData({'draft.issues':this.data.draft.issues});saveLocal(this.data.draft);}},accept(e){const issue=this.data.draft.issues.find(x=>x.id===e.detail.issueId);if(!issue||!issue.suggestion)return;const b=this.data.draft.blocks.find(x=>x.id===issue.blockId);if(b&&b.content===issue.suggestion.before){b.content=issue.suggestion.after;issue.status='accepted';this.data.draft.revision++;this.setData({draft:this.data.draft});saveLocal(this.data.draft);}}});
+const storage = require('../../services/storage-service');
+const { createDraft, saveLocal, saveCloud } = require('../../services/document-service');
+const { parseDocument } = require('../../utils/parser');
+const { checkHealth, score } = require('../../utils/health');
+const { TEMPLATES, MAX_SOURCE_LENGTH } = require('../../utils/constants');
+
+const example = '# 文档标题\n\n这里输入正文内容。支持 Markdown 标题、列表、代码块与 LaTeX 公式。\n\n## 公式示例\n\n$$\nE = mc^2\n$$\n\n- 第一项\n- 第二项';
+
+Page({
+  data: {
+    draft: null,
+    tab: 'edit',
+    sourceDirty: false,
+    panel: false,
+    score: 100,
+    errors: 0,
+    warnings: 0,
+    max: MAX_SOURCE_LENGTH,
+    visibleIssues: [],
+    activeBlockId: '',
+  },
+
+  onLoad(query) {
+    let draft = query.id && storage.get(query.id);
+    if (!draft) {
+      draft = saveLocal(createDraft());
+    }
+    this.load(draft);
+  },
+
+  load(draft) {
+    this.setData({ draft, sourceDirty: false });
+    this.refresh(draft);
+  },
+
+  refresh(draft) {
+    const issues = checkHealth(draft.blocks || [], TEMPLATES.find((template) => template.id === draft.templateId));
+    draft.issues = issues;
+    const pendingIssues = issues.filter((item) => item.status === 'pending');
+    this.setData({
+      'draft.issues': issues,
+      visibleIssues: pendingIssues,
+      score: score(issues),
+      errors: pendingIssues.filter((item) => item.severity === 'error').length,
+      warnings: pendingIssues.filter((item) => item.severity === 'warning').length,
+    });
+    saveLocal(draft);
+  },
+
+  input(event) {
+    const value = event.detail.value;
+    this.setData({ 'draft.sourceText': value, sourceDirty: true });
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => saveLocal(this.data.draft), 800);
+  },
+
+  title(event) {
+    this.setData({ 'draft.title': event.detail.value || '未命名文档' });
+  },
+
+  save() {
+    saveCloud(this.data.draft).then(() => wx.showToast({ title: '草稿已保存', icon: 'success' }));
+  },
+
+  example() {
+    this.setData({ 'draft.sourceText': example, sourceDirty: true });
+  },
+
+  clear() {
+    wx.showModal({
+      title: '清空内容',
+      content: '确定清空当前输入内容吗？',
+      success: (result) => {
+        if (result.confirm) {
+          this.setData({ 'draft.sourceText': '', sourceDirty: true });
+        }
+      },
+    });
+  },
+
+  parse() {
+    const text = (this.data.draft.sourceText || '').trim();
+    if (!text) {
+      wx.showToast({ title: '请先填写内容', icon: 'none' });
+      return;
+    }
+
+    const draft = this.data.draft;
+    draft.blocks = parseDocument(text);
+    draft.revision++;
+    draft.status = 'editing';
+    this.setData({ draft, sourceDirty: false, tab: 'preview' });
+    this.refresh(draft);
+    wx.showToast({ title: '结构识别完成', icon: 'success' });
+  },
+
+  switch(event) {
+    this.setData({ tab: event.currentTarget.dataset.tab });
+  },
+
+  issues() {
+    if (!this.data.draft.blocks.length) {
+      wx.showToast({ title: '请先识别内容', icon: 'none' });
+      return;
+    }
+    this.setData({ panel: true });
+  },
+
+  close() {
+    this.setData({ panel: false });
+  },
+
+  noop() {},
+
+  next() {
+    if (this.data.sourceDirty || !this.data.draft.blocks.length) return;
+    saveLocal(this.data.draft);
+    wx.navigateTo({ url: `/pages/template-select/index?id=${this.data.draft.id}` });
+  },
+
+  scrollToBlock(blockId) {
+    setTimeout(() => {
+      wx.pageScrollTo({ selector: `#${blockId}`, duration: 250, offsetTop: 80 });
+    }, 80);
+  },
+
+  focus(event) {
+    const block = this.data.draft.blocks.find((item) => item.id === event.detail.blockId);
+    if (!block) return;
+    this.setData({ tab: 'edit', activeBlockId: block.id });
+    this.scrollToBlock(block.id);
+    wx.showToast({ title: '已定位到对应内容', icon: 'none' });
+  },
+
+  focusIssue(event) {
+    const issue = this.data.draft.issues.find((item) => item.id === event.detail.issueId);
+    if (!issue) return;
+
+    this.setData({ panel: false });
+    if (issue.blockId) {
+      this.setData({ tab: 'edit', activeBlockId: issue.blockId });
+      this.scrollToBlock(issue.blockId);
+      wx.showToast({ title: '已定位到对应内容', icon: 'none' });
+    } else {
+      wx.showToast({ title: '该提醒没有对应块', icon: 'none' });
+    }
+  },
+
+  reject(event) {
+    const issue = this.data.draft.issues.find((item) => item.id === event.detail.issueId);
+    if (!issue) return;
+    issue.status = 'rejected';
+    this.refresh(this.data.draft);
+    this.setData({ panel: true });
+  },
+
+  accept(event) {
+    const issue = this.data.draft.issues.find((item) => item.id === event.detail.issueId);
+    if (!issue || !issue.suggestion) return;
+
+    const block = this.data.draft.blocks.find((item) => item.id === issue.blockId);
+    if (block && block.content === issue.suggestion.before) {
+      block.content = issue.suggestion.after;
+      issue.status = 'accepted';
+      this.data.draft.revision++;
+      this.refresh(this.data.draft);
+      this.setData({ panel: true });
+    }
+  },
+});

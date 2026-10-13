@@ -167,77 +167,117 @@ const deleteRecord = async (event) => {
 // AI 文本转 Word 函数
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnorderedList, OrderedList, ListItem, Table, TableCell, TableRow, BorderStyle, convertInchesToTwip } = require("docx");
 
+const headingLevels = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_3, HeadingLevel.HEADING_3, HeadingLevel.HEADING_3];
+
+function inlineRuns(text) {
+  const source = String(text || '').replace(/\r\n?/g, ' ');
+  const runs = [];
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
+  let lastIndex = 0;
+  let match = pattern.exec(source);
+  while (match) {
+    if (match.index > lastIndex) {
+      runs.push(new TextRun({ text: source.slice(lastIndex, match.index) }));
+    }
+
+    const token = match[0];
+    if (token.startsWith('**')) {
+      runs.push(new TextRun({ text: token.slice(2, -2), bold: true }));
+    } else if (token.startsWith('*')) {
+      runs.push(new TextRun({ text: token.slice(1, -1), italics: true }));
+    } else if (token.startsWith('`')) {
+      runs.push(new TextRun({ text: token.slice(1, -1), font: 'Courier New' }));
+    } else if (token.startsWith('$$')) {
+      runs.push(new TextRun({ text: token.slice(2, -2), italics: true, color: '666666' }));
+    } else if (token.startsWith('\\(')) {
+      runs.push(new TextRun({ text: token.slice(2, -2), italics: true, color: '666666' }));
+    } else if (token.startsWith('\\[')) {
+      runs.push(new TextRun({ text: token.slice(2, -2), italics: true, color: '666666' }));
+    } else if (token.startsWith('$')) {
+      runs.push(new TextRun({ text: token.slice(1, -1), italics: true, color: '666666' }));
+    }
+
+    lastIndex = pattern.lastIndex;
+    match = pattern.exec(source);
+  }
+
+  if (lastIndex < source.length) {
+    runs.push(new TextRun({ text: source.slice(lastIndex) }));
+  }
+
+  return runs.length ? runs : [new TextRun({ text: '' })];
+}
+
+function paragraphForBlock(block) {
+  if (block.type === 'heading') {
+    return new Paragraph({
+      children: inlineRuns(block.content),
+      heading: headingLevels[Math.max(0, Math.min((block.level || 1) - 1, 2))],
+      spacing: { after: 200 },
+    });
+  }
+
+  if (block.type === 'paragraph') {
+    return new Paragraph({ children: inlineRuns(block.content), spacing: { after: 200 } });
+  }
+
+  if (block.type === 'quote') {
+    return new Paragraph({
+      children: inlineRuns(block.content),
+      indent: { left: 720 },
+      border: {
+        left: {
+          color: 'cccccc',
+          space: 1,
+          style: BorderStyle.SINGLE,
+          size: 12,
+        },
+      },
+      spacing: { after: 200 },
+    });
+  }
+
+  if (block.type === 'code') {
+    const lines = String(block.content || '').split('\n');
+    return lines.flatMap((line) => [
+      new Paragraph({
+        children: [new TextRun({ text: line || ' ', font: 'Courier New' })],
+        spacing: { after: 100 },
+      }),
+    ]);
+  }
+
+  if (block.type === 'formula') {
+    return new Paragraph({
+      children: [new TextRun({ text: String(block.content || ''), italics: true, color: '666666' })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 },
+    });
+  }
+
+  if (block.type === 'list') {
+    return (block.content || []).map((item, index) => {
+      const runs = inlineRuns(item);
+      if (block.ordered) {
+        runs.unshift(new TextRun({ text: `${index + 1}. ` }));
+      }
+      return new Paragraph({
+        children: runs,
+        bullet: block.ordered ? undefined : { level: 0 },
+        spacing: { after: 80 },
+      });
+    });
+  }
+
+  return new Paragraph({ children: inlineRuns(block.content || ''), spacing: { after: 200 } });
+}
+
 const generateWordFromBlocks = async (blocks) => {
   const paragraphs = [];
 
   for (const block of blocks) {
-    if (block.type === "heading") {
-      const headingLevels = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3];
-      paragraphs.push(
-        new Paragraph({
-          text: block.content,
-          heading: headingLevels[Math.min(block.level - 1, 2)],
-          spacing: { after: 200 },
-        })
-      );
-    } else if (block.type === "paragraph") {
-      paragraphs.push(
-        new Paragraph({
-          text: block.content,
-          spacing: { after: 200 },
-        })
-      );
-    } else if (block.type === "quote") {
-      paragraphs.push(
-        new Paragraph({
-          text: block.content,
-          indent: { left: 720 },
-          border: {
-            left: {
-              color: "cccccc",
-              space: 1,
-              style: BorderStyle.SINGLE,
-              size: 12,
-            },
-          },
-          spacing: { after: 200 },
-        })
-      );
-    } else if (block.type === "code") {
-      paragraphs.push(
-        new Paragraph({
-          text: "代码块",
-          bold: true,
-          spacing: { after: 100 },
-        })
-      );
-      block.content.split("\n").forEach((line) => {
-        paragraphs.push(
-          new Paragraph({
-            text: line || " ",
-            font: "Courier New",
-            size: 20,
-            spacing: { after: 100 },
-          })
-        );
-      });
-      paragraphs.push(new Paragraph({ text: "", spacing: { after: 200 } }));
-    } else if (block.type === "formula") {
-      paragraphs.push(
-        new Paragraph({
-          text: "公式: " + block.content,
-          italics: true,
-          spacing: { after: 200 },
-        })
-      );
-    } else if (block.type === "list") {
-      const listItems = block.content.map((item) => new ListItem({ children: [new Paragraph(item)] }));
-      paragraphs.push(
-        new UnorderedList({
-          children: listItems,
-        })
-      );
-    }
+    const paragraph = paragraphForBlock(block);
+    paragraphs.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
   }
 
   const doc = new Document({

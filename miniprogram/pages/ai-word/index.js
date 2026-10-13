@@ -1,3 +1,5 @@
+const { parseDocument, normalizeLatex } = require("../../utils/parser");
+
 const EXAMPLE_TEXT = `# AI 内容格式转换工具
 
 这是一个示例输入，包含标题、列表、代码块和公式。
@@ -35,103 +37,35 @@ function escapeHtml(source) {
 }
 
 function parseInlineText(text) {
-	const escaped = escapeHtml(text);
+	const escaped = escapeHtml(normalizeLatex(text));
 	return escaped
-		.replace(/`([^`]+)`/g, '<text class="inline-code">$1</text>')
-		.replace(/\*\*(.+?)\*\*/g, '<text class="inline-strong">$1</text>')
-		.replace(/\*(.+?)\*/g, '<text class="inline-em">$1</text>');
+		.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+		.replace(/\*\*(.+?)\*\*/g, '<strong class="inline-strong">$1</strong>')
+		.replace(/\*(.+?)\*/g, '<em class="inline-em">$1</em>')
+		.replace(/\\\((.+?)\\\)/g, (_, expr) => `<span class="inline-formula">${escapeHtml(normalizeLatex(expr))}</span>`)
+		.replace(/\\\[(.+?)\\\]/g, (_, expr) => `<span class="inline-formula">${escapeHtml(normalizeLatex(expr))}</span>`)
+		.replace(/\$([^$\n]+)\$/g, (_, expr) => `<span class="inline-formula">${escapeHtml(normalizeLatex(expr))}</span>`);
 }
 
-function parseBlocks(rawText) {
-	const lines = String(rawText || "").replace(/\r\n/g, "\n").split("\n");
-	const blocks = [];
-	let i = 0;
-
-	while (i < lines.length) {
-		const line = lines[i];
-
-		if (!line.trim()) {
-			i += 1;
-			continue;
+function decorateBlocks(blocks) {
+	return blocks.map((block) => {
+		if (block.type === "list") {
+			return {
+				...block,
+				renderedItems: (block.content || []).map((item) => parseInlineText(item)),
+			};
 		}
-
-		if (line.trim().startsWith("```")) {
-			const codeLines = [];
-			i += 1;
-			while (i < lines.length && !lines[i].trim().startsWith("```")) {
-				codeLines.push(lines[i]);
-				i += 1;
-			}
-			if (i < lines.length) {
-				i += 1;
-			}
-			blocks.push({ type: "code", content: codeLines.join("\n") || " " });
-			continue;
+		if (block.type === "code") {
+			return {
+				...block,
+				renderedText: String(block.content || ""),
+			};
 		}
-
-		if (line.trim().startsWith("$$")) {
-			const formulaLines = [];
-			i += 1;
-			while (i < lines.length && !lines[i].trim().startsWith("$$")) {
-				formulaLines.push(lines[i]);
-				i += 1;
-			}
-			if (i < lines.length) {
-				i += 1;
-			}
-			blocks.push({ type: "formula", content: formulaLines.join(" ") || " " });
-			continue;
-		}
-
-		if (/^#{1,3}\s+/.test(line)) {
-			const level = line.match(/^#{1,3}/)[0].length;
-			blocks.push({
-				type: "heading",
-				level,
-				content: line.replace(/^#{1,3}\s+/, ""),
-			});
-			i += 1;
-			continue;
-		}
-
-		if (/^([-*+]\s+|\d+\.\s+)/.test(line.trim())) {
-			const listItems = [];
-			while (i < lines.length && /^([-*+]\s+|\d+\.\s+)/.test(lines[i].trim())) {
-				listItems.push(lines[i].trim().replace(/^([-*+]\s+|\d+\.\s+)/, ""));
-				i += 1;
-			}
-			blocks.push({ type: "list", content: listItems });
-			continue;
-		}
-
-		if (line.trim().startsWith(">")) {
-			const quoteLines = [];
-			while (i < lines.length && lines[i].trim().startsWith(">")) {
-				quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
-				i += 1;
-			}
-			blocks.push({ type: "quote", content: quoteLines.join("\n") });
-			continue;
-		}
-
-		const paragraphLines = [line.trim()];
-		i += 1;
-		while (
-			i < lines.length &&
-			lines[i].trim() &&
-			!/^#{1,3}\s+/.test(lines[i]) &&
-			!lines[i].trim().startsWith("```") &&
-			!lines[i].trim().startsWith("$$") &&
-			!/^([-*+]\s+|\d+\.\s+)/.test(lines[i].trim()) &&
-			!lines[i].trim().startsWith(">")
-		) {
-			paragraphLines.push(lines[i].trim());
-			i += 1;
-		}
-		blocks.push({ type: "paragraph", content: paragraphLines.join(" ") });
-	}
-
-	return blocks;
+		return {
+			...block,
+			rendered: parseInlineText(block.content || ""),
+		};
+	});
 }
 
 Page({
@@ -192,12 +126,9 @@ Page({
 			return;
 		}
 
-		const blocks = parseBlocks(text);
+		const blocks = decorateBlocks(parseDocument(text));
 		this.setData({
-			blocks: blocks.map((item) => ({
-				...item,
-				rendered: this.getRenderedBlock(item),
-			})),
+			blocks,
 			conversionStatus: "preview",
 			errorMessage: "",
 			activeTab: "preview",
@@ -210,16 +141,6 @@ Page({
 				icon: "success",
 			});
 		}
-	},
-
-	getRenderedBlock(block) {
-		if (block.type === "heading") {
-			return parseInlineText(block.content);
-		}
-		if (block.type === "list") {
-			return block.content.map((item) => parseInlineText(item));
-		}
-		return parseInlineText(block.content || "");
 	},
 
 	switchTab(e) {
