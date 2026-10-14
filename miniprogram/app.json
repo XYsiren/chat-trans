@@ -1,6 +1,8 @@
 {
   "pages": [
     "pages/drafts/index",
+    "pages/history/index",
+    "pages/profile/index",
     "pages/feedback/index",
     "pages/editor/index",
     "pages/template-select/index",

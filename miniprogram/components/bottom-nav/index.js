@@ -1,0 +1,1 @@
+Component({properties:{active:{type:String,value:'home'}},methods:{go(event){const tab=event.currentTarget.dataset.tab;if(tab===this.data.active)return;const pages={home:'/pages/drafts/index',history:'/pages/history/index',profile:'/pages/profile/index'};wx.redirectTo({url:pages[tab]});}}});

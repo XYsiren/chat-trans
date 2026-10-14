@@ -1,0 +1,2 @@
+const storage=require('../../services/storage-service');const {TEMPLATES}=require('../../utils/constants');
+Page({data:{exports:[],templates:TEMPLATES},onShow(){this.setData({exports:storage.list().filter(item=>item.status==='exported')});},open(event){wx.navigateTo({url:`/pages/editor/index?id=${event.currentTarget.dataset.id}`});},create(event){const templateId=event.currentTarget.dataset.id;wx.navigateTo({url:`/pages/drafts/index?templateId=${templateId}`});}});

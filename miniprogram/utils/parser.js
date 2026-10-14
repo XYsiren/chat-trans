@@ -89,7 +89,8 @@ function formulaPreview(latex) {
       // 分式内经常出现 H_{in} 这类一层嵌套的下标，不能只匹配纯文本参数。
       .replace(/\\(?:dfrac|tfrac|cfrac|frac)\{((?:[^{}]|\{[^{}]*\})*)\}\{((?:[^{}]|\{[^{}]*\})*)\}/g, '($1)/($2)')
       .replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
-      .replace(/\\(?:text|mathrm|mathbf|mathit|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
+      .replace(/\\mathcal\{L\}/g, 'ℒ')
+      .replace(/\\(?:text|mathrm|mathbf|mathit|mathcal|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
     if (next === value) break;
     value = next;
   }
@@ -127,6 +128,8 @@ function formulaPreview(latex) {
     .replace(/\\times/g, '×').replace(/\\cdot/g, '·')
     .replace(/\\Gamma/g, 'Γ').replace(/\\Delta/g, 'Δ').replace(/\\Theta/g, 'Θ').replace(/\\Psi/g, 'Ψ').replace(/\\Omega/g, 'Ω')
     .replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\gamma/g, 'γ').replace(/\\delta/g, 'δ').replace(/\\theta/g, 'θ').replace(/\\lambda/g, 'λ').replace(/\\mu/g, 'μ').replace(/\\pi/g, 'π').replace(/\\sigma/g, 'σ').replace(/\\omega/g, 'ω')
+    // 帽子符号用组合字符保留，避免预览中出现 \hat y 这样的源码。
+    .replace(/\\(?:widehat|hat)\s*\{?\s*([A-Za-z])\s*\}?/g, '$1̂')
     .replace(/\\,/g, ' ').replace(/\\\|/g, '|').replace(/\\\{/g, '{').replace(/\\\}/g, '}');
 
   // 清理 TeX 分组和空白控制符。下标/上标保留结构，以免复杂下标被错误篡改。
@@ -143,7 +146,7 @@ function formulaPreview(latex) {
   const groupedScript = (chars, map, open, close) => {
     // 求和下标 i\in S_G 等是一个表达式，不能把其中的单个字母错误地逐字变成下标。
     if (!/^[A-Za-z0-9+\-=]+$/.test(chars)) return `${open}${chars}${close}`;
-    if (!chars.split('').every((char) => map[char.toLowerCase()])) return `${open}${chars}${close}`;
+    if (!chars.split('').every((char) => char === char.toLowerCase() && map[char])) return `${open}${chars}${close}`;
     return script(chars, map, (char) => char);
   };
   return value
