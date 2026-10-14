@@ -203,8 +203,9 @@ function paragraphForBlock(block, layout, headingPrefix) {
 		const lines = String(block.content || '').split('\n');
 		return lines.flatMap((line) => [
 			new Paragraph({
-				children: [new TextRun({ text: line || ' ', font: 'Courier New', size: layout.body.size })],
-				spacing: { after: 100 },
+				children: [new TextRun({ text: line || ' ', font: 'Courier New', size: layout.body.size, color: '303030' })],
+				shading: { fill: 'F2F3F0' },
+				spacing: { after: 100, line: 280 },
 			}),
 		]);
 	}
@@ -314,7 +315,7 @@ exports.main = async (event) => {
 			children.push(
 				new Table({
 					width: { size: 100, widthType: WidthType.PERCENTAGE },
-					rows: block.content.map((row) => new TableRow({ children: row.map((cell) => new TableCell({ children: [new Paragraph({ children: inlineRuns(String(cell), layout.body), spacing: { line: layout.bodySpacing } })] })) })),
+					rows: block.content.map((row, rowIndex) => new TableRow({ children: row.map((cell) => new TableCell({ shading: rowIndex === 0 ? { fill: 'EDF3EE' } : undefined, children: [new Paragraph({ children: inlineRuns(String(cell), Object.assign({}, layout.body, rowIndex === 0 ? { bold: true } : {})), spacing: { line: layout.bodySpacing } })] })) })),
 				})
 			);
 		} else if (block.type === 'formula') {

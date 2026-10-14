@@ -15,6 +15,24 @@ function escapeHtml(source) {
 function listLine(line) { return /^\s*(?:[-*+]\s+|\d+[.)]\s+)/.test(line); }
 function isMathFence(line) { return /^\s*```(?:math|latex|tex)\s*$/i.test(line); }
 function isCodeFence(line) { return /^\s*```/.test(line); }
+function isTableRow(line) { return /^\s*\|?.+\|.+\|?\s*$/.test(line); }
+function isTableSeparator(line) {
+  if (!isTableRow(line)) return false;
+  const cells = tableCells(line);
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
+}
+function tableCells(line) {
+  const source = String(line || '').trim().replace(/^\||\|$/g, '');
+  const cells = []; let cell = ''; let escaped = false;
+  for (const char of source) {
+    if (escaped) { cell += char; escaped = false; }
+    else if (char === '\\') escaped = true;
+    else if (char === '|') { cells.push(cell.trim()); cell = ''; }
+    else cell += char;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
 
 function isStandaloneSingleDollar(line) {
   const source = line.trim();
@@ -184,10 +202,10 @@ function parseDocument(source) {
     }
 
     if (isCodeFence(line)) {
-      const rows = []; const first = i; i += 1;
+      const rows = []; const first = i; const fence = trimmed.match(/^```\s*([^\s`]*)/); const language = fence && fence[1] ? fence[1].toLowerCase() : ''; i += 1;
       while (i < lines.length && !isCodeFence(lines[i])) { rows.push(lines[i]); i += 1; }
       const closed = i < lines.length; if (closed) i += 1;
-      blocks.push(make('code', rows.join('\n'), start, blockEnd(Math.max(first, i - 1)), { closed }));
+      blocks.push(make('code', rows.join('\n'), start, blockEnd(Math.max(first, i - 1)), { closed, language }));
       continue;
     }
 
@@ -233,6 +251,21 @@ function parseDocument(source) {
       const content = rows.join('\n'); blocks.push(make('quote', content, start, blockEnd(i - 1), { rendered: renderInline(content) })); continue;
     }
 
+    // Markdown 表格：表头下一行必须是 --- / :---: 形式，避免把普通的竖线文本误判为表格。
+    if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const headers = tableCells(line); const separator = tableCells(lines[i + 1]); const first = i; i += 2;
+      const rows = [];
+      while (i < lines.length && isTableRow(lines[i]) && !isTableSeparator(lines[i])) {
+        const cells = tableCells(lines[i]);
+        if (cells.length < headers.length) while (cells.length < headers.length) cells.push('');
+        rows.push(cells.slice(0, headers.length)); i += 1;
+      }
+      const alignments = separator.map((cell) => cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left');
+      const content = [headers].concat(rows);
+      blocks.push(make('table', content, start, blockEnd(i - 1), { alignments, renderedRows: content.map((row) => row.map((cell) => renderInline(cell))) }));
+      continue;
+    }
+
     if (listLine(line)) {
       const rows = []; const renderedItems = []; const ordered = /^\s*\d+[.)]\s+/.test(line); const first = i;
       while (i < lines.length && listLine(lines[i])) {
@@ -244,7 +277,7 @@ function parseDocument(source) {
     const rows = [line.trim()]; const first = i; i += 1;
     while (i < lines.length) {
       const next = lines[i];
-      if (!next.trim() || isCodeFence(next) || isMathFence(next) || /^(\$\$|\\\[|\\\()/.test(next.trim()) || isStandaloneSingleDollar(next) || bareMathContent(next) || /^#{1,6}\s+/.test(next) || /^\s*>/.test(next) || listLine(next)) break;
+      if (!next.trim() || isCodeFence(next) || isMathFence(next) || isTableRow(next) || /^(\$\$|\\\[|\\\()/.test(next.trim()) || isStandaloneSingleDollar(next) || bareMathContent(next) || /^#{1,6}\s+/.test(next) || /^\s*>/.test(next) || listLine(next)) break;
       rows.push(next.trim()); i += 1;
     }
     const content = wrapBareInlineVariables(rows.join('\n')); blocks.push(make('paragraph', content, start, blockEnd(i - 1), { rendered: renderInline(content) }));

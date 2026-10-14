@@ -9,6 +9,7 @@ const cases = [
 	{ name: '金额不是公式块', input: '价格为 $10，明天付款。', types: ['paragraph'] },
 	{ name: 'math 围栏', input: '```math\n\\int_0^1 x dx\n```', types: ['formula'], formula: '\\int_0^1 x dx', closed: true },
 	{ name: '普通代码围栏', input: '```js\nconst x = 1;\n```', types: ['code'] },
+	{ name: 'Markdown 表格', input: '| 名称 | 数值 |\n| --- | :---: |\n| alpha | 1 |\n| beta | 2 |', types: ['table'] },
 	{ name: '行内公式保留在段落', input: '设 $x_i\\in S$，则成立。', types: ['paragraph'] },
 	{ name: '未闭合块公式', input: '$$\n\\sqrt{x}', types: ['formula'], formula: '\\sqrt{x}', closed: false },
 	{ name: '标题与公式混排', input: '## 定义\n\n\\(L=\\{x\\mid x>0\\}\\)', types: ['heading', 'formula'], formula: 'L=\\{x\\mid x>0\\}', closed: true },
@@ -31,4 +32,9 @@ assert.strictEqual(formulaPreview('5\\times5,\\ K=3,S=1,P=1'), '5×5, K=3,S=1,P=
 assert.strictEqual(formulaPreview('\\min C=\\sum_{i\\in S_G}(a_iP_{Gi}^2),\\tag{1}'), 'min C=∑₍i∈ S₍G₎₎(aᵢP₍Gi₎²), (1)');
 assert.strictEqual(formulaPreview('P_{Gi}-P_{Di}=\\Gamma(V,\\theta,z(G))\\quad(i,j\\in S_B),\\tag{2}'), 'P₍Gi₎-P₍Di₎=Γ(V,θ,z(G)) (i,j∈ S₍B₎), (2)');
 assert.strictEqual(formulaPreview('\\underline{P_{Gi}}\\le P_{Gi}\\le\\overline{P_{Gi}}\\quad(i\\in S_G),\\tag{4}'), 'P₍Gi₎≤ P₍Gi₎≤P₍Gi₎ (i∈ S₍G₎), (4)');
+const table = parseDocument('| 名称 | 数值 |\n| --- | :---: |\n| alpha | 1 |')[0];
+assert.deepStrictEqual(table.content, [['名称', '数值'], ['alpha', '1']]);
+assert.strictEqual(table.alignments[1], 'center');
+const code = parseDocument('```python\nprint(1)\n```')[0];
+assert.strictEqual(code.language, 'python');
 console.log(`Formula regression passed: ${cases.length} cases`);
