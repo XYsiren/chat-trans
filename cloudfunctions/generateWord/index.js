@@ -12,6 +12,7 @@ const {
 	TableCell,
 	WidthType,
 	PageBreak,
+	Header,
 } = require('docx');
 const { Math: OfficeMath, MathRun, latexToMath } = require('docx/math');
 
@@ -25,6 +26,26 @@ const headingLevels = [
 	HeadingLevel.HEADING_3,
 	HeadingLevel.HEADING_3,
 ];
+
+// 模板必须影响实际 DOCX，而不只是选择页上的名称。
+const TEMPLATE_LAYOUTS = {
+	homework: {
+		name: '课程作业', body: { font: '宋体', size: 24 }, heading: { font: '黑体', size: 32, bold: true },
+		bodySpacing: 360, headingSpacing: 280, numberHeadings: false, header: '',
+	},
+	'lab-report': {
+		name: '实验报告', body: { font: '宋体', size: 24 }, heading: { font: '黑体', size: 32, bold: true },
+		bodySpacing: 420, headingSpacing: 320, numberHeadings: true, header: '实验报告',
+	},
+	'study-note': {
+		name: '学术笔记', body: { font: '仿宋_GB2312', size: 22 }, heading: { font: '微软雅黑', size: 30, bold: true, color: '285943' },
+		bodySpacing: 360, headingSpacing: 240, numberHeadings: false, header: '学术笔记',
+	},
+};
+
+function layoutFor(templateId) {
+	return TEMPLATE_LAYOUTS[templateId] || TEMPLATE_LAYOUTS.homework;
+}
 
 /**
  * 作为 LaTeX 解析失败时的兜底文本。正常路径必须写入 OMML，才能在 Word/WPS
@@ -110,7 +131,7 @@ function decorateBareInlineMath(source) {
 	return value.replace(/@@MATH_TOKEN_(\d+)@@/g, (_, index) => protectedTokens[Number(index)]);
 }
 
-function inlineRuns(text) {
+function inlineRuns(text, runOptions) {
 	const source = decorateBareInlineMath(String(text || '').replace(/\r\n?/g, ' '));
 	const runs = [];
 	const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
@@ -118,16 +139,16 @@ function inlineRuns(text) {
 	let match = pattern.exec(source);
 	while (match) {
 		if (match.index > lastIndex) {
-			runs.push(normalTextRun(source.slice(lastIndex, match.index)));
+			runs.push(normalTextRun(source.slice(lastIndex, match.index), runOptions));
 		}
 
 		const token = match[0];
 		if (token.startsWith('**')) {
-			runs.push(normalTextRun(token.slice(2, -2), { bold: true }));
+			runs.push(normalTextRun(token.slice(2, -2), Object.assign({}, runOptions, { bold: true })));
 		} else if (token.startsWith('*')) {
-			runs.push(normalTextRun(token.slice(1, -1), { italics: true }));
+			runs.push(normalTextRun(token.slice(1, -1), Object.assign({}, runOptions, { italics: true })));
 		} else if (token.startsWith('`')) {
-			runs.push(normalTextRun(token.slice(1, -1), { font: 'Courier New' }));
+			runs.push(normalTextRun(token.slice(1, -1), Object.assign({}, runOptions, { font: 'Courier New' })));
 		} else if (token.startsWith('$$')) {
 			runs.push(...editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('\\(')) {
@@ -143,28 +164,28 @@ function inlineRuns(text) {
 	}
 
 	if (lastIndex < source.length) {
-		runs.push(normalTextRun(source.slice(lastIndex)));
+		runs.push(normalTextRun(source.slice(lastIndex), runOptions));
 	}
 
 	return runs.length ? runs : [new TextRun({ text: '' })];
 }
 
-function paragraphForBlock(block) {
+function paragraphForBlock(block, layout, headingPrefix) {
 	if (block.type === 'heading') {
 		return new Paragraph({
-			children: inlineRuns(block.content),
+			children: inlineRuns(`${headingPrefix || ''}${block.content}`, layout.heading),
 			heading: headingLevels[Math.max(0, Math.min((block.level || 1) - 1, 2))],
-			spacing: { after: 200 },
+			spacing: { before: layout.headingSpacing, after: layout.headingSpacing },
 		});
 	}
 
 	if (block.type === 'paragraph') {
-		return new Paragraph({ children: inlineRuns(block.content), spacing: { after: 200 } });
+		return new Paragraph({ children: inlineRuns(block.content, layout.body), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
 	}
 
 	if (block.type === 'quote') {
 		return new Paragraph({
-			children: inlineRuns(block.content),
+			children: inlineRuns(block.content, layout.body),
 			indent: { left: 720 },
 			border: {
 				left: {
@@ -174,7 +195,7 @@ function paragraphForBlock(block) {
 					size: 12,
 				},
 			},
-			spacing: { after: 200 },
+			spacing: { after: layout.bodySpacing, line: layout.bodySpacing },
 		});
 	}
 
@@ -182,36 +203,36 @@ function paragraphForBlock(block) {
 		const lines = String(block.content || '').split('\n');
 		return lines.flatMap((line) => [
 			new Paragraph({
-				children: [new TextRun({ text: line || ' ', font: 'Courier New' })],
+				children: [new TextRun({ text: line || ' ', font: 'Courier New', size: layout.body.size })],
 				spacing: { after: 100 },
 			}),
 		]);
 	}
 
-	if (block.type === 'formula') return formulaParagraphs(block.content);
+	if (block.type === 'formula') return formulaParagraphs(block.content, 0, layout);
 
 	if (block.type === 'list') {
 		return (block.content || []).map((item, index) => {
-			const runs = inlineRuns(item);
+			const runs = inlineRuns(item, layout.body);
 			if (block.ordered) {
 				runs.unshift(new TextRun({ text: `${index + 1}. ` }));
 			}
 			return new Paragraph({
 				children: runs,
 				bullet: block.ordered ? undefined : { level: 0 },
-				spacing: { after: 80 },
+				spacing: { after: 80, line: layout.bodySpacing },
 			});
 		});
 	}
 
-	return new Paragraph({ children: inlineRuns(block.content || ''), spacing: { after: 200 } });
+	return new Paragraph({ children: inlineRuns(block.content || '', layout.body), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
 }
 
-function formulaParagraphs(latex, number) {
+function formulaParagraphs(latex, number, layout) {
 	const formula = new Paragraph({
 		children: editableMath(latex),
 		alignment: AlignmentType.CENTER,
-		spacing: { after: 200 },
+		spacing: { after: layout.bodySpacing },
 	});
 	if (!number) return formula;
 
@@ -227,10 +248,34 @@ function formulaParagraphs(latex, number) {
 	});
 }
 
+function nextHeadingPrefix(block, layout, levels) {
+	if (!layout.numberHeadings || block.type !== 'heading') return '';
+	const level = Math.max(1, Math.min(block.level || 1, 3));
+	levels[level - 1] = (levels[level - 1] || 0) + 1;
+	for (let index = level; index < levels.length; index += 1) levels[index] = 0;
+	return `${levels.slice(0, level).map((value) => value || 0).join('.')}. `;
+}
+
+function sectionFor(children, layout) {
+	const section = { properties: {}, children };
+	if (layout.header) {
+		section.headers = {
+			default: new Header({
+				children: [new Paragraph({
+					children: [new TextRun({ text: layout.header, font: layout.body.font, size: 20, color: '6E6E6A' })],
+					alignment: AlignmentType.RIGHT,
+				})],
+			}),
+		};
+	}
+	return section;
+}
+
 async function generateWordFromBlocks(blocks) {
+	const layout = TEMPLATE_LAYOUTS.homework;
 	const children = [];
 	for (const block of blocks) {
-		const paragraph = paragraphForBlock(block);
+		const paragraph = paragraphForBlock(block, layout);
 		children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
 	}
 
@@ -253,33 +298,35 @@ exports.main = async (event) => {
 
 	const children = [];
 	const exportOptions = d.exportOptions || event.exportOptions || {};
+	const layout = layoutFor(d.templateId);
 	if (exportOptions.cover) {
 		children.push(
-			new Paragraph({ text: d.title || '未命名文档', heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }),
-			new Paragraph({ text: d.templateId === 'lab-report' ? '实验报告' : d.templateId === 'study-note' ? '学术笔记' : '课程作业', alignment: AlignmentType.CENTER }),
+			new Paragraph({ children: [new TextRun({ text: d.title || '未命名文档', font: layout.heading.font, size: 44, bold: true })], alignment: AlignmentType.CENTER, spacing: { before: 1800, after: 360 } }),
+			new Paragraph({ children: [new TextRun({ text: layout.name, font: layout.body.font, size: 28 })], alignment: AlignmentType.CENTER }),
 			new Paragraph({ children: [new PageBreak()] })
 		);
 	}
 
 	let formulaNumber = 0;
+	const headingLevels = [0, 0, 0];
 	for (const block of blocks) {
 		if (block.type === 'table' && Array.isArray(block.content)) {
 			children.push(
 				new Table({
 					width: { size: 100, widthType: WidthType.PERCENTAGE },
-					rows: block.content.map((row) => new TableRow({ children: row.map((cell) => new TableCell({ children: [new Paragraph(String(cell))] })) })),
+					rows: block.content.map((row) => new TableRow({ children: row.map((cell) => new TableCell({ children: [new Paragraph({ children: inlineRuns(String(cell), layout.body), spacing: { line: layout.bodySpacing } })] })) })),
 				})
 			);
 		} else if (block.type === 'formula') {
 			formulaNumber += 1;
-			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0));
+			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout));
 		} else {
-			const paragraph = paragraphForBlock(block);
+			const paragraph = paragraphForBlock(block, layout, nextHeadingPrefix(block, layout, headingLevels));
 			children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
 		}
 	}
 
-	const buffer = await Packer.toBuffer(new Document({ sections: [{ children }] }));
+	const buffer = await Packer.toBuffer(new Document({ sections: [sectionFor(children, layout)] }));
 	const openid = cloud.getWXContext().OPENID;
 	const safeTitle = String(d.title || '未命名文档').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名文档';
 	const fileName = `${safeTitle}.docx`;

@@ -3,9 +3,11 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
 const ALLOWED = new Set([
+	'app_opened',
 	'document_processing_started', 'repair_suggestion_shown', 'repair_suggestion_accepted',
 	'repair_suggestion_dismissed', 'repair_undone', 'repair_feedback_incorrect',
 	'word_export_succeeded', 'word_export_failed', 'document_delivery_completed',
+	'feedback_submitted',
 ]);
 
 exports.main = async (event) => {

@@ -14,6 +14,8 @@ App({
         env: this.globalData.env,
         traceUser: true,
       });
+      // 仅记录匿名 OpenID 对应的一次启动事件，不采集文档正文或个人资料。
+      require('./services/metrics-service').track('app_opened');
     }
   },
 });

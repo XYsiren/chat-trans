@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/drafts/index",
+    "pages/feedback/index",
     "pages/editor/index",
     "pages/template-select/index",
     "pages/export-result/index"
