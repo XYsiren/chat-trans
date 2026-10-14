@@ -71,7 +71,7 @@ function formulaPreview(latex) {
       // 分式内经常出现 H_{in} 这类一层嵌套的下标，不能只匹配纯文本参数。
       .replace(/\\(?:dfrac|tfrac|cfrac|frac)\{((?:[^{}]|\{[^{}]*\})*)\}\{((?:[^{}]|\{[^{}]*\})*)\}/g, '($1)/($2)')
       .replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
-      .replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\{([^{}]*)\}/g, '$1');
+      .replace(/\\(?:text|mathrm|mathbf|mathit|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
     if (next === value) break;
     value = next;
   }
@@ -100,6 +100,8 @@ function formulaPreview(latex) {
     .replace(/\\subseteq/g, '⊆').replace(/\\supseteq/g, '⊇').replace(/\\subset/g, '⊂').replace(/\\supset/g, '⊃').replace(/\\notin/g, '∉').replace(/\\in/g, '∈')
     .replace(/\\leq|\\le/g, '≤').replace(/\\geq|\\ge/g, '≥').replace(/\\neq|\\ne/g, '≠')
     .replace(/\\cdots/g, '⋯').replace(/\\ldots|\\dots/g, '…').replace(/\\cap/g, '∩').replace(/\\cup/g, '∪')
+    .replace(/\\Rightarrow/g, '⇒').replace(/\\rightarrow|\\to/g, '→').replace(/\\leftarrow/g, '←')
+    .replace(/\\times/g, '×').replace(/\\cdot/g, '·')
     .replace(/\\,/g, ' ').replace(/\\\|/g, '|').replace(/\\\{/g, '{').replace(/\\\}/g, '}');
 
   // 清理 TeX 分组和空白控制符。下标/上标保留结构，以免复杂下标被错误篡改。

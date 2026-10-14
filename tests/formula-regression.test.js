@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { parseDocument, normalizeLatex } = require('../miniprogram/utils/parser');
+const { parseDocument, normalizeLatex, formulaPreview } = require('../miniprogram/utils/parser');
 
 const cases = [
 	{ name: '块级分式', input: '$$\n\\frac{a}{b}\\le t\n$$', types: ['formula'], formula: '\\frac{a}{b}\\le t', closed: true },
@@ -25,4 +25,7 @@ cases.forEach((test) => {
 });
 
 assert.strictEqual(normalizeLatex('\\cfrac{1}{2}+{\\bf x}'), '\\dfrac{1}{2}+{\\mathbf{x}}');
+assert.strictEqual(formulaPreview('\\boldsymbol{P=\\frac{K-1}{2}}'), 'P=(K-1)/(2)');
+assert.strictEqual(formulaPreview('K=3 \\Rightarrow P=(3-1)/2=1'), 'K=3 ⇒ P=(3-1)/2=1');
+assert.strictEqual(formulaPreview('5\\times5,\\ K=3,S=1,P=1'), '5×5, K=3,S=1,P=1');
 console.log(`Formula regression passed: ${cases.length} cases`);
