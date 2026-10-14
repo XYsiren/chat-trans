@@ -11,7 +11,9 @@ const {
 	TableRow,
 	TableCell,
 	WidthType,
+	PageBreak,
 } = require('docx');
+const { Math: OfficeMath, MathRun, latexToMath } = require('docx/math');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -25,10 +27,8 @@ const headingLevels = [
 ];
 
 /**
- * 微信里打开 docx 使用的是内置预览器，它不会稳定渲染 OOXML 的 m:oMath。
- * 以前直接写入原生公式对象时，Word 中可编辑、但在小程序里会显示为空白。
- * 因此导出链路优先生成跨端可见的数学文本；content 仍保留原始 LaTeX，方便
- * 后续增加“桌面 Word 原生公式”格式时复用。
+ * 作为 LaTeX 解析失败时的兜底文本。正常路径必须写入 OMML，才能在 Word/WPS
+ * 中以公式对象打开并继续编辑。
  */
 function formulaText(latex) {
 	let value = String(latex || '').replace(/\r\n?/g, ' ').trim();
@@ -68,8 +68,13 @@ function formulaText(latex) {
 	return value.replace(/[{}]/g, '').replace(/\s+/g, ' ').trim() || '[空公式]';
 }
 
-function mathRun(latex) {
-	return new TextRun({ text: formulaText(latex), font: 'Cambria Math' });
+function editableMath(latex) {
+	try {
+		return new OfficeMath({ children: latexToMath(String(latex || '').trim()) });
+	} catch (error) {
+		// 单个不受支持的命令不能让整份文档导出失败；此时仍保留可读内容。
+		return new OfficeMath({ children: [new MathRun(formulaText(latex))] });
+	}
 }
 
 function normalTextRun(text, options) {
@@ -117,13 +122,13 @@ function inlineRuns(text) {
 		} else if (token.startsWith('`')) {
 			runs.push(normalTextRun(token.slice(1, -1), { font: 'Courier New' }));
 		} else if (token.startsWith('$$')) {
-			runs.push(mathRun(token.slice(2, -2)));
+			runs.push(editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('\\(')) {
-			runs.push(mathRun(token.slice(2, -2)));
+			runs.push(editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('\\[')) {
-			runs.push(mathRun(token.slice(2, -2)));
+			runs.push(editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('$')) {
-			runs.push(mathRun(token.slice(1, -1)));
+			runs.push(editableMath(token.slice(1, -1)));
 		}
 
 		lastIndex = pattern.lastIndex;
@@ -176,13 +181,7 @@ function paragraphForBlock(block) {
 		]);
 	}
 
-	if (block.type === 'formula') {
-		return new Paragraph({
-			children: [mathRun(block.content)],
-			alignment: AlignmentType.CENTER,
-			spacing: { after: 200 },
-		});
-	}
+	if (block.type === 'formula') return formulaParagraphs(block.content);
 
 	if (block.type === 'list') {
 		return (block.content || []).map((item, index) => {
@@ -199,6 +198,26 @@ function paragraphForBlock(block) {
 	}
 
 	return new Paragraph({ children: inlineRuns(block.content || ''), spacing: { after: 200 } });
+}
+
+function formulaParagraphs(latex, number) {
+	const formula = new Paragraph({
+		children: [editableMath(latex)],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 200 },
+	});
+	if (!number) return formula;
+
+	// 三列布局让编号靠右，同时不把公式从页面中央挤开。
+	return new Table({
+		width: { size: 100, widthType: WidthType.PERCENTAGE },
+		borders: { top: { style: BorderStyle.NIL }, bottom: { style: BorderStyle.NIL }, left: { style: BorderStyle.NIL }, right: { style: BorderStyle.NIL }, insideHorizontal: { style: BorderStyle.NIL }, insideVertical: { style: BorderStyle.NIL } },
+		rows: [new TableRow({ children: [
+			new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph('')] }),
+			new TableCell({ width: { size: 70, type: WidthType.PERCENTAGE }, children: [formula] }),
+			new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph({ text: `(${number})`, alignment: AlignmentType.CENTER })] }),
+		] })],
+	});
 }
 
 async function generateWordFromBlocks(blocks) {
@@ -226,13 +245,16 @@ exports.main = async (event) => {
 	if (!d.id || blocks.length > 1000) throw new Error('无效的导出内容');
 
 	const children = [];
-	if (d.exportOptions && d.exportOptions.cover) {
+	const exportOptions = d.exportOptions || {};
+	if (exportOptions.cover) {
 		children.push(
 			new Paragraph({ text: d.title || '未命名文档', heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }),
-			new Paragraph({ text: '' })
+			new Paragraph({ text: d.templateId === 'lab-report' ? '实验报告' : d.templateId === 'study-note' ? '学术笔记' : '课程作业', alignment: AlignmentType.CENTER }),
+			new Paragraph({ children: [new PageBreak()] })
 		);
 	}
 
+	let formulaNumber = 0;
 	for (const block of blocks) {
 		if (block.type === 'table' && Array.isArray(block.content)) {
 			children.push(
@@ -241,6 +263,9 @@ exports.main = async (event) => {
 					rows: block.content.map((row) => new TableRow({ children: row.map((cell) => new TableCell({ children: [new Paragraph(String(cell))] })) })),
 				})
 			);
+		} else if (block.type === 'formula') {
+			formulaNumber += 1;
+			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0));
 		} else {
 			const paragraph = paragraphForBlock(block);
 			children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
