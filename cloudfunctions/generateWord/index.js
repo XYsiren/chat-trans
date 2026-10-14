@@ -69,11 +69,18 @@ function formulaText(latex) {
 }
 
 function editableMath(latex) {
+	const fallback = new TextRun({
+		text: formulaText(latex),
+		font: 'Cambria Math',
+		// 微信文档预览器会跳过 m:oMath。它通常不会处理“隐藏文字”标记，因而
+		// 仍可显示此兼容文本；Word/WPS 则只显示前面的可编辑公式对象。
+		vanish: true,
+	});
 	try {
-		return new OfficeMath({ children: latexToMath(String(latex || '').trim()) });
+		return [new OfficeMath({ children: latexToMath(String(latex || '').trim()) }), fallback];
 	} catch (error) {
 		// 单个不受支持的命令不能让整份文档导出失败；此时仍保留可读内容。
-		return new OfficeMath({ children: [new MathRun(formulaText(latex))] });
+		return [new OfficeMath({ children: [new MathRun(formulaText(latex))] }), fallback];
 	}
 }
 
@@ -122,13 +129,13 @@ function inlineRuns(text) {
 		} else if (token.startsWith('`')) {
 			runs.push(normalTextRun(token.slice(1, -1), { font: 'Courier New' }));
 		} else if (token.startsWith('$$')) {
-			runs.push(editableMath(token.slice(2, -2)));
+			runs.push(...editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('\\(')) {
-			runs.push(editableMath(token.slice(2, -2)));
+			runs.push(...editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('\\[')) {
-			runs.push(editableMath(token.slice(2, -2)));
+			runs.push(...editableMath(token.slice(2, -2)));
 		} else if (token.startsWith('$')) {
-			runs.push(editableMath(token.slice(1, -1)));
+			runs.push(...editableMath(token.slice(1, -1)));
 		}
 
 		lastIndex = pattern.lastIndex;
@@ -202,7 +209,7 @@ function paragraphForBlock(block) {
 
 function formulaParagraphs(latex, number) {
 	const formula = new Paragraph({
-		children: [editableMath(latex)],
+		children: editableMath(latex),
 		alignment: AlignmentType.CENTER,
 		spacing: { after: 200 },
 	});
@@ -245,7 +252,7 @@ exports.main = async (event) => {
 	if (!d.id || blocks.length > 1000) throw new Error('无效的导出内容');
 
 	const children = [];
-	const exportOptions = d.exportOptions || {};
+	const exportOptions = d.exportOptions || event.exportOptions || {};
 	if (exportOptions.cover) {
 		children.push(
 			new Paragraph({ text: d.title || '未命名文档', heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }),
@@ -279,5 +286,5 @@ exports.main = async (event) => {
 	// 云端路径仍带时间戳以避免同名文档覆盖；只把友好的文件名返回给前端。
 	const cloudPath = `${openid}/${d.id}/${Date.now()}_${fileName}`;
 	const upload = await cloud.uploadFile({ cloudPath, fileContent: buffer });
-	return { success: true, fileID: upload.fileID, fileName };
+	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 2 };
 };

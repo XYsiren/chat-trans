@@ -103,10 +103,21 @@ function formulaPreview(latex) {
     .replace(/\\,/g, ' ').replace(/\\\|/g, '|').replace(/\\\{/g, '{').replace(/\\\}/g, '}');
 
   // 清理 TeX 分组和空白控制符。下标/上标保留结构，以免复杂下标被错误篡改。
-  return value
+  value = value
     .replace(/\\[,!;:\s]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  // 小程序没有 TeX 排版引擎，至少把最常见的上下标变成可读的 Unicode 形式，
+  // 不让预览页露出 H_{out}、x^2 这类源码。
+  const lower = { a: 'ₐ', e: 'ₑ', h: 'ₕ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ', l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ', '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '+': '₊', '-': '₋', '=': '₌' };
+  const upper = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', r: 'ʳ', s: 'ˢ', t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', '=': '⁼' };
+  const script = (chars, map, fallback) => chars.split('').map((char) => map[char.toLowerCase()] || fallback(char)).join('');
+  return value
+    .replace(/_\{([^{}]+)\}/g, (_, chars) => script(chars, lower, (char) => `₍${char}₎`))
+    .replace(/\^\{([^{}]+)\}/g, (_, chars) => script(chars, upper, (char) => `⁽${char}⁾`))
+    .replace(/_([A-Za-z0-9])/g, (_, char) => script(char, lower, (item) => item))
+    .replace(/\^([A-Za-z0-9])/g, (_, char) => script(char, upper, (item) => item));
 }
 
 function renderInline(source) {

@@ -32,12 +32,16 @@ Page({
 				name: 'generateWord',
 				data: {
 					draft,
+					exportOptions: draft.exportOptions || {},
 				},
 			})
 			.then((response) => {
 				const result = response.result || {};
 				if (!result.success) {
 					throw new Error(result.errMsg || result.message || '生成失败');
+				}
+				if (result.generatorVersion !== 2) {
+					throw new Error('云函数尚未更新，请在微信开发者工具中重新部署 generateWord 后再导出。');
 				}
 				draft.status = 'exported';
 				storage.save(draft);
