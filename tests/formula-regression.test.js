@@ -28,4 +28,7 @@ assert.strictEqual(normalizeLatex('\\cfrac{1}{2}+{\\bf x}'), '\\dfrac{1}{2}+{\\m
 assert.strictEqual(formulaPreview('\\boldsymbol{P=\\frac{K-1}{2}}'), 'P=(K-1)/(2)');
 assert.strictEqual(formulaPreview('K=3 \\Rightarrow P=(3-1)/2=1'), 'K=3 ⇒ P=(3-1)/2=1');
 assert.strictEqual(formulaPreview('5\\times5,\\ K=3,S=1,P=1'), '5×5, K=3,S=1,P=1');
+assert.strictEqual(formulaPreview('\\min C=\\sum_{i\\in S_G}(a_iP_{Gi}^2),\\tag{1}'), 'min C=∑₍i∈ S₍G₎₎(aᵢP₍Gi₎²), (1)');
+assert.strictEqual(formulaPreview('P_{Gi}-P_{Di}=\\Gamma(V,\\theta,z(G))\\quad(i,j\\in S_B),\\tag{2}'), 'P₍Gi₎-P₍Di₎=Γ(V,θ,z(G)) (i,j∈ S₍B₎), (2)');
+assert.strictEqual(formulaPreview('\\underline{P_{Gi}}\\le P_{Gi}\\le\\overline{P_{Gi}}\\quad(i\\in S_G),\\tag{4}'), 'P₍Gi₎≤ P₍Gi₎≤P₍Gi₎ (i∈ S₍G₎), (4)');
 console.log(`Formula regression passed: ${cases.length} cases`);

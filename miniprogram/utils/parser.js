@@ -92,6 +92,11 @@ function formulaPreview(latex) {
 
   // 兼容基础库对字符串反斜杠的差异：这里用明确的正则兜底替换所有常见命令。
   value = value
+    // 预览只做可读降级：去除 Word/LaTex 的排版指令，但保留公式本身和编号。
+    .replace(/\\(?:under|over)line\{((?:[^{}]|\{[^{}]*\})*)\}/g, '$1')
+    .replace(/\\tag\{([^{}]*)\}/g, ' ($1)')
+    .replace(/\\quad|\\qquad/g, ' ')
+    .replace(/\\min\b/g, 'min').replace(/\\max\b/g, 'max')
     .replace(/\\bigcup/g, '⋃').replace(/\\bigcap/g, '⋂')
     .replace(/\\left|\\right|\\bigg|\\Bigg|\\big|\\Big/g, '')
     .replace(/\\langle/g, '⟨').replace(/\\rangle/g, '⟩')
@@ -102,6 +107,8 @@ function formulaPreview(latex) {
     .replace(/\\cdots/g, '⋯').replace(/\\ldots|\\dots/g, '…').replace(/\\cap/g, '∩').replace(/\\cup/g, '∪')
     .replace(/\\Rightarrow/g, '⇒').replace(/\\rightarrow|\\to/g, '→').replace(/\\leftarrow/g, '←')
     .replace(/\\times/g, '×').replace(/\\cdot/g, '·')
+    .replace(/\\Gamma/g, 'Γ').replace(/\\Delta/g, 'Δ').replace(/\\Theta/g, 'Θ').replace(/\\Psi/g, 'Ψ').replace(/\\Omega/g, 'Ω')
+    .replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\gamma/g, 'γ').replace(/\\delta/g, 'δ').replace(/\\theta/g, 'θ').replace(/\\lambda/g, 'λ').replace(/\\mu/g, 'μ').replace(/\\pi/g, 'π').replace(/\\sigma/g, 'σ').replace(/\\omega/g, 'ω')
     .replace(/\\,/g, ' ').replace(/\\\|/g, '|').replace(/\\\{/g, '{').replace(/\\\}/g, '}');
 
   // 清理 TeX 分组和空白控制符。下标/上标保留结构，以免复杂下标被错误篡改。
@@ -115,11 +122,17 @@ function formulaPreview(latex) {
   const lower = { a: 'ₐ', e: 'ₑ', h: 'ₕ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ', l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ', '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '+': '₊', '-': '₋', '=': '₌' };
   const upper = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', r: 'ʳ', s: 'ˢ', t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', '=': '⁼' };
   const script = (chars, map, fallback) => chars.split('').map((char) => map[char.toLowerCase()] || fallback(char)).join('');
+  const groupedScript = (chars, map, open, close) => {
+    // 求和下标 i\in S_G 等是一个表达式，不能把其中的单个字母错误地逐字变成下标。
+    if (!/^[A-Za-z0-9+\-=]+$/.test(chars)) return `${open}${chars}${close}`;
+    if (!chars.split('').every((char) => map[char.toLowerCase()])) return `${open}${chars}${close}`;
+    return script(chars, map, (char) => char);
+  };
   return value
-    .replace(/_\{([^{}]+)\}/g, (_, chars) => script(chars, lower, (char) => `₍${char}₎`))
-    .replace(/\^\{([^{}]+)\}/g, (_, chars) => script(chars, upper, (char) => `⁽${char}⁾`))
-    .replace(/_([A-Za-z0-9])/g, (_, char) => script(char, lower, (item) => item))
-    .replace(/\^([A-Za-z0-9])/g, (_, char) => script(char, upper, (item) => item));
+    .replace(/_\{([^{}]+)\}/g, (_, chars) => groupedScript(chars, lower, '₍', '₎'))
+    .replace(/\^\{([^{}]+)\}/g, (_, chars) => groupedScript(chars, upper, '⁽', '⁾'))
+    .replace(/_([A-Za-z0-9])/g, (_, char) => script(char, lower, (item) => `₍${item}₎`))
+    .replace(/\^([A-Za-z0-9])/g, (_, char) => script(char, upper, (item) => `⁽${item}⁾`));
 }
 
 function renderInline(source) {

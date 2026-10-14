@@ -72,7 +72,8 @@ Page({
   },
 
   title(event) {
-    this.setData({ 'draft.title': event.detail.value || '未命名文档' });
+    // 输入框被清空时也要保留空值，否则用户无法替换默认标题。
+    this.setData({ 'draft.title': event.detail.value });
   },
 
   save() {
