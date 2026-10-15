@@ -61,7 +61,8 @@ function formulaText(latex) {
 			// 分子/分母常带 H_{in} 这类一层嵌套花括号，不能只匹配纯文本分式。
 			.replace(/\\(?:dfrac|tfrac|cfrac|frac)\{((?:[^{}]|\{[^{}]*\})*)\}\{((?:[^{}]|\{[^{}]*\})*)\}/g, '($1)/($2)')
 			.replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
-			.replace(/\\(?:text|mathrm|mathbf|mathit|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
+			.replace(/\\mathcal\{L\}/g, 'ℒ')
+			.replace(/\\(?:text|mathrm|mathbf|mathit|mathcal|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
 		if (next === value) break;
 		value = next;
 	}
@@ -78,6 +79,7 @@ function formulaText(latex) {
 	];
 	commands.forEach(([from, to]) => { value = value.split(from).join(to); });
 	value = value
+		.replace(/\\(?:widehat|hat)\s*\{?\s*([A-Za-z])\s*\}?/g, '$1̂')
 		.replace(/\\[,!;:\s]+/g, ' ')
 		.replace(/\\([{}])/g, '$1');
 
@@ -103,6 +105,14 @@ function editableMath(latex) {
 		// 单个不受支持的命令不能让整份文档导出失败；此时仍保留可读内容。
 		return [new OfficeMath({ children: [new MathRun(formulaText(latex))] }), fallback];
 	}
+}
+
+function mathRuns(latex, formulaMode) {
+	// 微信手机端预览器不渲染 OMML；改用常规文字 Run 才能保证可见。
+	if (formulaMode === 'compatible') {
+		return [new TextRun({ text: formulaText(latex), font: 'Cambria Math' })];
+	}
+	return editableMath(latex);
 }
 
 function normalTextRun(text, options) {
@@ -131,7 +141,7 @@ function decorateBareInlineMath(source) {
 	return value.replace(/@@MATH_TOKEN_(\d+)@@/g, (_, index) => protectedTokens[Number(index)]);
 }
 
-function inlineRuns(text, runOptions) {
+function inlineRuns(text, runOptions, formulaMode) {
 	const source = decorateBareInlineMath(String(text || '').replace(/\r\n?/g, ' '));
 	const runs = [];
 	const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
@@ -150,13 +160,13 @@ function inlineRuns(text, runOptions) {
 		} else if (token.startsWith('`')) {
 			runs.push(normalTextRun(token.slice(1, -1), Object.assign({}, runOptions, { font: 'Courier New' })));
 		} else if (token.startsWith('$$')) {
-			runs.push(...editableMath(token.slice(2, -2)));
+			runs.push(...mathRuns(token.slice(2, -2), formulaMode));
 		} else if (token.startsWith('\\(')) {
-			runs.push(...editableMath(token.slice(2, -2)));
+			runs.push(...mathRuns(token.slice(2, -2), formulaMode));
 		} else if (token.startsWith('\\[')) {
-			runs.push(...editableMath(token.slice(2, -2)));
+			runs.push(...mathRuns(token.slice(2, -2), formulaMode));
 		} else if (token.startsWith('$')) {
-			runs.push(...editableMath(token.slice(1, -1)));
+			runs.push(...mathRuns(token.slice(1, -1), formulaMode));
 		}
 
 		lastIndex = pattern.lastIndex;
@@ -170,22 +180,22 @@ function inlineRuns(text, runOptions) {
 	return runs.length ? runs : [new TextRun({ text: '' })];
 }
 
-function paragraphForBlock(block, layout, headingPrefix) {
+function paragraphForBlock(block, layout, headingPrefix, formulaMode) {
 	if (block.type === 'heading') {
 		return new Paragraph({
-			children: inlineRuns(`${headingPrefix || ''}${block.content}`, layout.heading),
+			children: inlineRuns(`${headingPrefix || ''}${block.content}`, layout.heading, formulaMode),
 			heading: headingLevels[Math.max(0, Math.min((block.level || 1) - 1, 2))],
 			spacing: { before: layout.headingSpacing, after: layout.headingSpacing },
 		});
 	}
 
 	if (block.type === 'paragraph') {
-		return new Paragraph({ children: inlineRuns(block.content, layout.body), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
+		return new Paragraph({ children: inlineRuns(block.content, layout.body, formulaMode), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
 	}
 
 	if (block.type === 'quote') {
 		return new Paragraph({
-			children: inlineRuns(block.content, layout.body),
+			children: inlineRuns(block.content, layout.body, formulaMode),
 			indent: { left: 720 },
 			border: {
 				left: {
@@ -210,11 +220,11 @@ function paragraphForBlock(block, layout, headingPrefix) {
 		]);
 	}
 
-	if (block.type === 'formula') return formulaParagraphs(block.content, 0, layout);
+	if (block.type === 'formula') return formulaParagraphs(block.content, 0, layout, formulaMode);
 
 	if (block.type === 'list') {
 		return (block.content || []).map((item, index) => {
-			const runs = inlineRuns(item, layout.body);
+			const runs = inlineRuns(item, layout.body, formulaMode);
 			if (block.ordered) {
 				runs.unshift(new TextRun({ text: `${index + 1}. ` }));
 			}
@@ -226,12 +236,12 @@ function paragraphForBlock(block, layout, headingPrefix) {
 		});
 	}
 
-	return new Paragraph({ children: inlineRuns(block.content || '', layout.body), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
+	return new Paragraph({ children: inlineRuns(block.content || '', layout.body, formulaMode), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
 }
 
-function formulaParagraphs(latex, number, layout) {
+function formulaParagraphs(latex, number, layout, formulaMode) {
 	const formula = new Paragraph({
-		children: editableMath(latex),
+		children: mathRuns(latex, formulaMode),
 		alignment: AlignmentType.CENTER,
 		spacing: { after: layout.bodySpacing },
 	});
@@ -276,7 +286,7 @@ async function generateWordFromBlocks(blocks) {
 	const layout = TEMPLATE_LAYOUTS.homework;
 	const children = [];
 	for (const block of blocks) {
-		const paragraph = paragraphForBlock(block, layout);
+		const paragraph = paragraphForBlock(block, layout, '', 'editable');
 		children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
 	}
 
@@ -300,6 +310,7 @@ exports.main = async (event) => {
 	const children = [];
 	const exportOptions = d.exportOptions || event.exportOptions || {};
 	const layout = layoutFor(d.templateId);
+	const formulaMode = event.formulaMode === 'compatible' ? 'compatible' : 'editable';
 	if (exportOptions.cover) {
 		children.push(
 			new Paragraph({ children: [new TextRun({ text: d.title || '未命名文档', font: layout.heading.font, size: 44, bold: true })], alignment: AlignmentType.CENTER, spacing: { before: 1800, after: 360 } }),
@@ -315,14 +326,14 @@ exports.main = async (event) => {
 			children.push(
 				new Table({
 					width: { size: 100, widthType: WidthType.PERCENTAGE },
-					rows: block.content.map((row, rowIndex) => new TableRow({ children: row.map((cell) => new TableCell({ shading: rowIndex === 0 ? { fill: 'EDF3EE' } : undefined, children: [new Paragraph({ children: inlineRuns(String(cell), Object.assign({}, layout.body, rowIndex === 0 ? { bold: true } : {})), spacing: { line: layout.bodySpacing } })] })) })),
+					rows: block.content.map((row, rowIndex) => new TableRow({ children: row.map((cell) => new TableCell({ shading: rowIndex === 0 ? { fill: 'EDF3EE' } : undefined, children: [new Paragraph({ children: inlineRuns(String(cell), Object.assign({}, layout.body, rowIndex === 0 ? { bold: true } : {}), formulaMode), spacing: { line: layout.bodySpacing } })] })) })),
 				})
 			);
 		} else if (block.type === 'formula') {
 			formulaNumber += 1;
-			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout));
+			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout, formulaMode));
 		} else {
-			const paragraph = paragraphForBlock(block, layout, nextHeadingPrefix(block, layout, headingLevels));
+			const paragraph = paragraphForBlock(block, layout, nextHeadingPrefix(block, layout, headingLevels), formulaMode);
 			children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
 		}
 	}
@@ -334,5 +345,5 @@ exports.main = async (event) => {
 	// 云端路径仍带时间戳以避免同名文档覆盖；只把友好的文件名返回给前端。
 	const cloudPath = `${openid}/${d.id}/${Date.now()}_${fileName}`;
 	const upload = await cloud.uploadFile({ cloudPath, fileContent: buffer });
-	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 2 };
+	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 3, formulaMode };
 };

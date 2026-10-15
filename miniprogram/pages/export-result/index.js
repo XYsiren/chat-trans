@@ -6,7 +6,7 @@ function fileName(draft) {
 }
 
 Page({
-	data: { draft: null, state: 'idle', message: '', fileID: '', name: '' },
+	data: { draft: null, state: 'idle', message: '', fileID: '', name: '', formulaMode: 'editable' },
 
 	onLoad(query) {
 		const draft = storage.get(query.id);
@@ -20,6 +20,8 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
+		const system = wx.getSystemInfoSync();
+		const formulaMode = /^(android|ios)$/i.test(system.platform || '') ? 'compatible' : 'editable';
 		this.setData({ state: 'generating', message: '正在应用版式…' });
 
 		if (!wx.cloud) {
@@ -33,6 +35,7 @@ Page({
 				data: {
 					draft,
 					exportOptions: draft.exportOptions || {},
+					formulaMode,
 				},
 			})
 			.then((response) => {
@@ -40,13 +43,13 @@ Page({
 				if (!result.success) {
 					throw new Error(result.errMsg || result.message || '生成失败');
 				}
-				if (result.generatorVersion !== 2) {
+				if (result.generatorVersion !== 3) {
 					throw new Error('云函数尚未更新，请在微信开发者工具中重新部署 generateWord 后再导出。');
 				}
 				draft.status = 'exported';
 				storage.save(draft);
 			metrics.track('word_export_succeeded', { draftId: draft.id, attemptId: draft.activeAttemptId });
-				this.setData({ state: 'success', fileID: result.fileID, name: result.fileName || this.data.name });
+				this.setData({ state: 'success', fileID: result.fileID, name: result.fileName || this.data.name, formulaMode: result.formulaMode || formulaMode });
 			})
 			.catch((error) => {
 			metrics.track('word_export_failed', { draftId: draft.id, attemptId: draft.activeAttemptId });
