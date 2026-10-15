@@ -4,6 +4,7 @@ const { parseDocument, normalizeLatex, formulaPreview } = require('../miniprogra
 const cases = [
 	{ name: '块级分式', input: '$$\n\\frac{a}{b}\\le t\n$$', types: ['formula'], formula: '\\frac{a}{b}\\le t', closed: true },
 	{ name: '单行块公式', input: '$$E=mc^2$$', types: ['formula'], formula: 'E=mc^2', closed: true },
+	{ name: '转义反斜杠公式块', input: '\\\\(\\\\frac{1}{2}\\\\)', types: ['formula'], formula: '\\frac{1}{2}', closed: true },
 	{ name: '反斜杠块公式', input: '\\[\\sum_{i=1}^{n}i\\]', types: ['formula'], formula: '\\sum_{i=1}^{n}i', closed: true },
 	{ name: '独占单美元公式', input: '$x_i^2+y_i^2$', types: ['formula'], formula: 'x_i^2+y_i^2', closed: true },
 	{ name: '金额不是公式块', input: '价格为 $10，明天付款。', types: ['paragraph'] },

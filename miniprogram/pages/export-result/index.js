@@ -20,11 +20,8 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
-		// 微信手机文档预览器不渲染 Word 原生 OMML；手机端改用兼容公式文本，
-		// Windows/macOS 端仍导出可编辑 OMML 公式。
-		const system = wx.getSystemInfoSync();
-		const isDesktop = system.platform === 'windows' || system.platform === 'mac';
-		const formulaMode = isDesktop ? 'editable' : 'compatible';
+		// 所有端均生成独立的 Word 原生 OMML 公式块，保证 Word/WPS 可编辑。
+		const formulaMode = 'editable';
 		this.setData({ state: 'generating', message: '正在应用版式…' });
 
 		if (!wx.cloud) {

@@ -64,6 +64,9 @@ function wrapBareInlineVariables(source) {
 function normalizeLatex(source) {
   return String(source == null ? '' : source)
     .replace(/\r\n?/g, '\n')
+		// 聊天窗口常把 LaTeX 命令转义为 `\\frac`、`\\lambda`；数组的 `\\` 换行
+		// 后面通常不是字母，因此不会被这一规则误改。
+		.replace(/\\\\(?=[A-Za-z])/g, '\\')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\\cfrac\b/g, '\\dfrac')
     .replace(/\\mathnormal\b/g, '\\mathit')
@@ -182,7 +185,9 @@ function formulaBlock(content, start, end, closed, delimiter) {
 }
 
 function parseDocument(source) {
-  const input = String(source == null ? '' : source).replace(/\r\n?/g, '\n');
+  // 从 Markdown/聊天窗口复制时，公式分隔符可能被转义成 `\\(`、`\\[`；
+  // 只还原分隔符，保留公式内部 `\\` 的数组换行语义。
+  const input = String(source == null ? '' : source).replace(/\r\n?/g, '\n').replace(/\\\\(?=[\[\]()])/g, '\\');
   const lines = input.split('\n');
   const offsets = []; let offset = 0;
   lines.forEach((line) => { offsets.push(offset); offset += line.length + 1; });
