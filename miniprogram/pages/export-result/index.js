@@ -6,7 +6,7 @@ function fileName(draft) {
 }
 
 Page({
-	data: { draft: null, state: 'idle', message: '', fileID: '', name: '', formulaMode: 'editable' },
+	data: { draft: null, state: 'idle', message: '', fileID: '', name: '', formulaMode: 'compatible' },
 
 	onLoad(query) {
 		const draft = storage.get(query.id);
@@ -20,8 +20,9 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
-		const system = wx.getSystemInfoSync();
-		const formulaMode = /^(android|ios)$/i.test(system.platform || '') ? 'compatible' : 'editable';
+		// wx.openDocument 的预览器（包括 Windows/macOS 微信）不会可靠渲染
+		// Word 的 OMML 公式对象。统一使用可预览的文本公式，避免桌面端丢公式。
+		const formulaMode = 'compatible';
 		this.setData({ state: 'generating', message: '正在应用版式…' });
 
 		if (!wx.cloud) {
@@ -43,7 +44,7 @@ Page({
 				if (!result.success) {
 					throw new Error(result.errMsg || result.message || '生成失败');
 				}
-				if (result.generatorVersion !== 3) {
+				if (result.generatorVersion !== 4) {
 					throw new Error('云函数尚未更新，请在微信开发者工具中重新部署 generateWord 后再导出。');
 				}
 				draft.status = 'exported';

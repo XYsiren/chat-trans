@@ -307,7 +307,7 @@ async function generateWordFromBlocks(blocks) {
 	const layout = TEMPLATE_LAYOUTS.homework;
 	const children = [];
 	for (const block of blocks) {
-		const paragraph = paragraphForBlock(block, layout, '', 'editable');
+		const paragraph = paragraphForBlock(block, layout, '', 'compatible');
 		children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
 	}
 
@@ -331,7 +331,9 @@ exports.main = async (event) => {
 	const children = [];
 	const exportOptions = d.exportOptions || event.exportOptions || {};
 	const layout = layoutFor(d.templateId);
-	const formulaMode = event.formulaMode === 'compatible' ? 'compatible' : 'editable';
+	// 云函数也以兼容格式为默认值，避免旧客户端或第三方调用在微信预览中
+	// 生成不可见的 OMML 公式。只有显式请求 editable 时才生成可编辑公式对象。
+	const formulaMode = event.formulaMode === 'editable' ? 'editable' : 'compatible';
 	if (exportOptions.cover) {
 		children.push(
 			new Paragraph({ children: [new TextRun({ text: d.title || '未命名文档', font: layout.heading.font, size: 44, bold: true })], alignment: AlignmentType.CENTER, spacing: { before: 1800, after: 360 } }),
@@ -366,5 +368,5 @@ exports.main = async (event) => {
 	// 云端路径仍带时间戳以避免同名文档覆盖；只把友好的文件名返回给前端。
 	const cloudPath = `${openid}/${d.id}/${Date.now()}_${fileName}`;
 	const upload = await cloud.uploadFile({ cloudPath, fileContent: buffer });
-	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 3, formulaMode };
+	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 4, formulaMode };
 };

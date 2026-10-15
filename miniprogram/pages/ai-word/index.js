@@ -173,6 +173,8 @@ Page({
 							ordered: block.ordered,
 						})),
 					},
+					// 此页面同样通过 wx.openDocument 交付，需使用可预览的文本公式。
+					formulaMode: "compatible",
 				},
 			})
 			.then((resp) => {
