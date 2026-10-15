@@ -81,23 +81,44 @@ Page({
 				});
 			})
 			.then((response) => {
-				if (!response.tempFilePath) {
-					throw new Error('文件下载失败');
-				}
-				return new Promise((resolve, reject) => {
-					// 小程序环境不提供系统级“另存为”路径选择器；不再打开微信预览，
-					// 直接把文件保存到小程序本地文件区。
-					wx.saveFile({
+				if (!response.tempFilePath) throw new Error('文件下载失败');
+				const savedPath = `${wx.env.USER_DATA_PATH}/${this.data.name}`;
+				return new Promise((resolve) => {
+					wx.getFileSystemManager().saveFile({
 						tempFilePath: response.tempFilePath,
-						success: resolve,
-						fail: reject,
+						filePath: savedPath,
+						success: (result) => resolve(result.savedFilePath || savedPath),
+						fail: () => resolve(response.tempFilePath),
 					});
 				});
 			})
-			.then(() => {
+			.then((filePath) => {
 				wx.hideLoading();
-				metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId });
-				wx.showToast({ title: '文件已保存', icon: 'success' });
+				const system = wx.getSystemInfoSync();
+				const isDesktop = system.platform === 'windows' || system.platform === 'mac';
+				if (isDesktop && typeof wx.saveFileToDisk === 'function') {
+					// PC 微信会弹出系统“另存为”窗口，由用户选择磁盘位置和文件名。
+					wx.saveFileToDisk({
+						filePath,
+						success: () => {
+							metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId });
+							wx.showToast({ title: '已导出到所选位置', icon: 'success' });
+						},
+						fail: (error) => {
+							if (/cancel/i.test(error.errMsg || '')) return;
+							wx.showModal({ title: '导出失败', content: error.errMsg || error.message || '请重新导出', showCancel: false });
+						},
+					});
+					return;
+				}
+
+				// 手机端不支持系统路径选择，打开微信文件页后可通过右上角菜单转发或保存。
+				wx.openDocument({
+					filePath,
+					showMenu: true,
+					success: () => metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId }),
+					fail: (error) => wx.showModal({ title: '打开失败', content: error.errMsg || error.message || '请重新下载后再试', showCancel: false }),
+				});
 			})
 			.catch((error) => {
 				wx.hideLoading();
