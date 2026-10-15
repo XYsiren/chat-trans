@@ -15,6 +15,8 @@ const cases = [
 	{ name: '未闭合块公式', input: '$$\n\\sqrt{x}', types: ['formula'], formula: '\\sqrt{x}', closed: false },
 	{ name: '标题与公式混排', input: '## 定义\n\n\\(L=\\{x\\mid x>0\\}\\)', types: ['heading', 'formula'], formula: 'L=\\{x\\mid x>0\\}', closed: true },
 	{ name: '连续行内公式不是未闭合块公式', input: '\\(S=1\\), \\(K=3\\)', types: ['paragraph'] },
+	{ name: '美元公式内的重复圆括号定界符', input: '$\\(S=1\\), \\(K=3\\)$', types: ['formula'], formula: 'S=1, K=3', closed: true },
+	{ name: '粗体公式内的重复圆括号定界符', input: '$$2P-2=0 \\Rightarrow \\boldsymbol{\\(P=1\\)}$$', types: ['formula'], formula: '2P-2=0 \\Rightarrow \\boldsymbol{P=1}', closed: true },
 	{ name: '旧式兼容命令', input: '$$\\cfrac{1}{2}+{\\bf x}$$', types: ['formula'], formula: '\\dfrac{1}{2}+{\\mathbf{x}}', closed: true },
 	{ name: '集合量词公式', input: '$$\\forall i\\ne j, S_i\\cap S_j=\\emptyset$$', types: ['formula'], formula: '\\forall i\\ne j, S_i\\cap S_j=\\emptyset', closed: true },
 ];
@@ -28,6 +30,7 @@ cases.forEach((test) => {
 });
 
 assert.strictEqual(normalizeLatex('\\cfrac{1}{2}+{\\bf x}'), '\\dfrac{1}{2}+{\\mathbf{x}}');
+assert.strictEqual(normalizeLatex('\\(S=1\\), \\(K=3\\)'), 'S=1, K=3');
 assert.strictEqual(formulaPreview('\\boldsymbol{P=\\frac{K-1}{2}}'), 'P=(K-1)/(2)');
 assert.strictEqual(formulaPreview('K=3 \\Rightarrow P=(3-1)/2=1'), 'K=3 ⇒ P=(3-1)/2=1');
 assert.strictEqual(formulaPreview('5\\times5,\\ K=3,S=1,P=1'), '5×5, K=3,S=1,P=1');

@@ -29,7 +29,10 @@ function latexForImage(latex) {
 		.replace(/\r\n?/g, '\n')
 		.trim()
 		// 从 Markdown/聊天窗口复制时，反斜杠常被额外转义一次。
-		.replace(/\\{2,}(?=[A-Za-z])/g, '\\');
+		.replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+		// 公式已经由 `$...$`、`$$...$$` 等外层环境分隔时，内嵌的 `\\(...\\)`
+		// 只是重复定界符；不移除会被 Word/MathJax 当成未知命令而原样输出。
+		.replace(/\\\(([\s\S]*?)\\\)/g, '$1');
 }
 
 // MathJax 的 SVG 是 HTML 序列化结果；其中偶发的裸 `&`（例如辅助属性或
@@ -144,7 +147,7 @@ function layoutFor(templateId) {
  */
 function formulaText(latex, tagMode) {
 	// 保留 array/aligned 中的真实换行：手机端虽不能渲染 OMML，但仍应按行展示。
-	let value = String(latex || '').replace(/\r\n?/g, '\n').trim();
+	let value = latexForImage(latex);
 	// 部分复制来源会把 \begin、\end、\tag 写成双反斜杠；这不是数组的换行，
 	// 先还原命令本身，避免手机预览泄露原始控制标签。
 	value = value.replace(/\\\\(?=(?:begin|end|tag)\b)/g, '\\');
@@ -206,18 +209,19 @@ function formulaText(latex, tagMode) {
 }
 
 function editableMath(latex) {
+	const normalizedLatex = latexForImage(latex);
 	const fallback = new TextRun({
-		text: formulaText(latex),
+		text: formulaText(normalizedLatex),
 		font: 'Cambria Math',
 		// 微信文档预览器会跳过 m:oMath。它通常不会处理“隐藏文字”标记，因而
 		// 仍可显示此兼容文本；Word/WPS 则只显示前面的可编辑公式对象。
 		vanish: true,
 	});
 	try {
-		return [new OfficeMath({ children: latexToMath(String(latex || '').trim()) }), fallback];
+		return [new OfficeMath({ children: latexToMath(normalizedLatex) }), fallback];
 	} catch (error) {
 		// 单个不受支持的命令不能让整份文档导出失败；此时仍保留可读内容。
-		return [new OfficeMath({ children: [new MathRun(formulaText(latex))] }), fallback];
+		return [new OfficeMath({ children: [new MathRun(formulaText(normalizedLatex))] }), fallback];
 	}
 }
 

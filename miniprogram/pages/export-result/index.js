@@ -20,11 +20,11 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
-		// 微信手机端文档预览器不显示 OMML；手机端将公式排版为 PNG 嵌入，
-		// Windows/macOS 端保留 Word 原生可编辑公式。
+		// 手机端恢复使用兼容文本公式。PNG/SVG 转换会受云函数运行环境影响，
+		// 且部分公式在微信预览器中会出现错误；Windows/macOS 端仍使用原生可编辑公式。
 		const system = wx.getSystemInfoSync();
 		const isDesktop = system.platform === 'windows' || system.platform === 'mac';
-		const formulaMode = isDesktop ? 'editable' : 'image';
+		const formulaMode = isDesktop ? 'editable' : 'compatible';
 		this.setData({ state: 'generating', message: '正在应用版式…' });
 
 		if (!wx.cloud) {

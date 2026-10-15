@@ -3,7 +3,7 @@
   <view wx:elif="{{block.type === 'paragraph'}}" class="paragraph"><rich-text nodes="{{block.rendered}}"></rich-text></view>
   <view wx:elif="{{block.type === 'quote'}}" class="quote"><rich-text nodes="{{block.rendered}}"></rich-text></view>
   <view wx:elif="{{block.type === 'code'}}" class="code"><view class="code-label">{{block.language || '代码'}}</view><text selectable="true">{{block.content}}</text></view>
-  <view wx:elif="{{block.type === 'formula'}}" class="formula"><rich-text wx:if="{{formulaNodes.length}}" nodes="{{formulaNodes}}"></rich-text><text wx:else selectable="true" class="formula-text">{{block.displayText || block.content}}</text><text wx:if="{{formulaError}}" class="formula-fallback">公式暂以简化形式显示</text><text wx:if="{{issueCount}}" class="issue-dot">●</text></view>
+  <view wx:elif="{{block.type === 'formula'}}" class="formula"><rich-text wx:if="{{formulaNodes.length}}" nodes="{{formulaNodes}}"></rich-text><text wx:else selectable="true" class="formula-text">{{block.displayText || block.content}}</text><text wx:if="{{issueCount}}" class="issue-dot">●</text></view>
   <view wx:elif="{{block.type === 'list'}}" class="list"><view wx:for="{{block.renderedItems || block.content}}" wx:key="index"><text>{{block.ordered ? (index + 1) + '. ' : '• '}}</text><rich-text nodes="{{item}}"></rich-text></view></view>
   <view wx:elif="{{block.type === 'table'}}" class="table-wrap"><view wx:for="{{block.renderedRows}}" wx:for-item="row" wx:for-index="rowIndex" wx:key="rowIndex" class="table-row {{rowIndex===0?'table-head':''}}"><view wx:for="{{row}}" wx:for-item="cell" wx:key="index" class="table-cell"><rich-text nodes="{{cell}}"></rich-text></view></view></view>
 </view>

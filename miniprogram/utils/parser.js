@@ -78,6 +78,10 @@ function normalizeLatex(source) {
     .replace(/\\cal\s+([A-Za-z])/g, '\\mathcal{$1}')
     .replace(/\\bf\s+([A-Za-z])/g, '\\mathbf{$1}')
     .replace(/\\it\s+([A-Za-z])/g, '\\mathit{$1}')
+		// 有些来源会写成 `$\\(x\\)$` 或 `\\boldsymbol{\\(x\\)}`：外层已经
+		// 是数学环境，内层 `\\(` / `\\)` 不是 LaTeX 内容，传给 KaTeX/Word 会报错。
+		// 成对移除即可同时保留逗号、空格和其他真正的公式语义。
+		.replace(/\\\(([\s\S]*?)\\\)/g, '$1')
     .trim();
 }
 
