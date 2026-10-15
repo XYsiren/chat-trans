@@ -19,7 +19,7 @@
 
 - `documentParse`：按 OpenID 隔离的草稿云端保存。
 - `aiReview`：受限的公式审校接口骨架；接入模型时仅在该函数中配置 API Key 与 Schema 校验。
-- `generateWord`：将确认后的结构化块生成 Word 文件。
+- `generateWord`：将确认后的结构化块生成 Word 文件。上传时请选择“云端安装依赖”；手机端公式 PNG 渲染依赖也由此安装。
 
 未部署云函数时，编辑、识别、检查和本地草稿仍然可用；导出页会给出可重试提示。
 

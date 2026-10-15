@@ -16,22 +16,86 @@ const {
 	ImageRun,
 } = require('docx');
 const { Math: OfficeMath, MathRun, latexToMath } = require('docx/math');
-const { mathjax } = require('mathjax-full/js/mathjax.js');
-const { TeX } = require('mathjax-full/js/input/tex.js');
-const { SVG } = require('mathjax-full/js/output/svg.js');
-const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
-const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
-const { AllPackages } = require('mathjax-full/js/input/tex/AllPackages.js');
-const sharp = require('sharp');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const mathAdaptor = liteAdaptor();
-RegisterHTMLHandler(mathAdaptor);
-const mathDocument = mathjax.document('', {
-	InputJax: new TeX({ packages: AllPackages }),
-	OutputJax: new SVG({ fontCache: 'none' }),
-});
+// 图片公式仅用于手机端：微信内置的 DOCX 阅读器不会稳定地绘制 Office Math
+// (OMML)，但会绘制普通 PNG。渲染模块延迟加载，避免它的运行环境问题影响
+// 电脑端的可编辑公式导出。
+let formulaRenderer;
+
+function latexForImage(latex) {
+	return String(latex || '')
+		.replace(/\r\n?/g, '\n')
+		.trim()
+		// 从 Markdown/聊天窗口复制时，反斜杠常被额外转义一次。
+		.replace(/\\\\(?=[A-Za-z])/g, '\\');
+}
+
+async function getFormulaRenderer() {
+	if (formulaRenderer) return formulaRenderer;
+	try {
+		const fs = require('fs');
+		const { mathjax } = require('mathjax-full/js/mathjax.js');
+		const { TeX } = require('mathjax-full/js/input/tex.js');
+		const { SVG } = require('mathjax-full/js/output/svg.js');
+		const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
+		const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
+		const { AllPackages } = require('mathjax-full/js/input/tex/AllPackages.js');
+		const { Resvg, initWasm } = require('@resvg/resvg-wasm');
+
+		// resvg 的 WASM 版没有 sharp 之类的本机二进制依赖，适合云函数运行时。
+		await initWasm(fs.readFileSync(require.resolve('@resvg/resvg-wasm/index_bg.wasm')));
+		const adaptor = liteAdaptor();
+		RegisterHTMLHandler(adaptor);
+		const document = mathjax.document('', {
+			InputJax: new TeX({ packages: AllPackages }),
+			OutputJax: new SVG({ fontCache: 'none' }),
+		});
+
+		formulaRenderer = (latex) => {
+			const node = document.convert(latexForImage(latex), {
+				display: true,
+				em: 16,
+				ex: 8,
+				containerWidth: 80 * 16,
+			});
+			const svg = adaptor.outerHTML(node);
+			const rendered = new Resvg(svg, {
+				background: 'rgba(255,255,255,0)',
+				fitTo: { mode: 'zoom', value: 2 },
+			}).render();
+			return { data: rendered.asPng(), width: rendered.width, height: rendered.height };
+		};
+		return formulaRenderer;
+	} catch (error) {
+		throw new Error(`手机公式图片渲染器未就绪：${error.message || error}`);
+	}
+}
+
+async function buildFormulaImages(blocks) {
+	const renderer = await getFormulaRenderer();
+	const images = new Map();
+	const add = (latex) => {
+		const source = latexForImage(latex);
+		if (source) images.set(source, null);
+	};
+	const visitText = (text) => {
+		const source = decorateBareInlineMath(String(text || ''));
+		const pattern = /\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
+		let match;
+		while ((match = pattern.exec(source))) add(match[1] || match[2] || match[3] || match[4]);
+	};
+	for (const block of blocks) {
+		if (block.type === 'formula') add(block.content);
+		else if (block.type === 'table' && Array.isArray(block.content)) block.content.forEach((row) => row.forEach(visitText));
+		else if (block.type === 'list' && Array.isArray(block.content)) block.content.forEach(visitText);
+		else visitText(block.content);
+	}
+	for (const latex of images.keys()) images.set(latex, renderer(latex));
+	return images;
+}
+
 
 const headingLevels = [
 	HeadingLevel.HEADING_1,
@@ -145,54 +209,23 @@ function editableMath(latex) {
 	}
 }
 
-function mathRuns(latex, formulaMode, tagMode) {
+function formulaImageRun(latex, formulaImages) {
+	const image = formulaImages && formulaImages.get(latexForImage(latex));
+	if (!image) throw new Error('公式图片缺失，请重新生成文档');
+	// Word 的尺寸单位是 CSS 像素。限制宽度可避免长公式撑破页面，同时保持比例。
+	const width = Math.max(24, Math.min(520, Math.round(image.width / 2)));
+	const height = Math.max(18, Math.min(720, Math.round((image.height / image.width) * width)));
+	return new ImageRun({ data: image.data, type: 'png', transformation: { width, height } });
+}
+
+function mathRuns(latex, formulaMode, tagMode, formulaImages) {
+	if (formulaMode === 'image') return [formulaImageRun(latex, formulaImages)];
 	// 微信手机端预览器不渲染 OMML；改用常规文字 Run 才能保证可见。
-	if (formulaMode === 'compatible' || formulaMode === 'image') {
+	if (formulaMode === 'compatible') {
 		const lines = formulaText(latex, tagMode).split('\n');
 		return lines.map((line, index) => new TextRun({ text: line, font: 'Cambria Math', break: index || undefined }));
 	}
 	return editableMath(latex);
-}
-
-async function formulaImageRun(latex) {
-	const node = mathDocument.convert(String(latex || '').trim(), { display: true });
-	const markup = mathAdaptor.outerHTML(node);
-	const start = markup.indexOf('<svg');
-	const end = markup.lastIndexOf('</svg>');
-	if (start < 0 || end < 0) throw new Error('公式 SVG 生成失败');
-
-	const png = await sharp(Buffer.from(markup.slice(start, end + 6)), { density: 180 }).png().toBuffer();
-	const info = await sharp(png).metadata();
-	if (!info.width || !info.height) throw new Error('公式图片尺寸无效');
-	const scale = Math.min(1, 520 / info.width);
-	return new ImageRun({
-		data: png,
-		transformation: {
-			width: Math.max(1, Math.round(info.width * scale)),
-			height: Math.max(1, Math.round(info.height * scale)),
-		},
-	});
-}
-
-async function imageFormulaParagraphs(latex, number, layout) {
-	let children;
-	try {
-		children = [await formulaImageRun(latex)];
-	} catch (error) {
-		// 若个别公式无法渲染为图片，仍提供清理过的文本，绝不让手机端留空。
-		children = mathRuns(latex, 'compatible', number ? 'hide' : 'show');
-	}
-	const formula = new Paragraph({ children, alignment: AlignmentType.CENTER, spacing: { after: layout.bodySpacing } });
-	if (!number) return formula;
-	return new Table({
-		width: { size: 100, widthType: WidthType.PERCENTAGE },
-		borders: { top: { style: BorderStyle.NIL }, bottom: { style: BorderStyle.NIL }, left: { style: BorderStyle.NIL }, right: { style: BorderStyle.NIL }, insideHorizontal: { style: BorderStyle.NIL }, insideVertical: { style: BorderStyle.NIL } },
-		rows: [new TableRow({ children: [
-			new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph('')] }),
-			new TableCell({ width: { size: 70, type: WidthType.PERCENTAGE }, children: [formula] }),
-			new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph({ text: `(${number})`, alignment: AlignmentType.CENTER })] }),
-		] })],
-	});
 }
 
 function normalTextRun(text, options) {
@@ -221,7 +254,7 @@ function decorateBareInlineMath(source) {
 	return value.replace(/@@MATH_TOKEN_(\d+)@@/g, (_, index) => protectedTokens[Number(index)]);
 }
 
-function inlineRuns(text, runOptions, formulaMode) {
+function inlineRuns(text, runOptions, formulaMode, formulaImages) {
 	const source = decorateBareInlineMath(String(text || '').replace(/\r\n?/g, ' '));
 	const runs = [];
 	const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
@@ -240,13 +273,13 @@ function inlineRuns(text, runOptions, formulaMode) {
 		} else if (token.startsWith('`')) {
 			runs.push(normalTextRun(token.slice(1, -1), Object.assign({}, runOptions, { font: 'Courier New' })));
 		} else if (token.startsWith('$$')) {
-			runs.push(...mathRuns(token.slice(2, -2), formulaMode));
+			runs.push(...mathRuns(token.slice(2, -2), formulaMode, undefined, formulaImages));
 		} else if (token.startsWith('\\(')) {
-			runs.push(...mathRuns(token.slice(2, -2), formulaMode));
+			runs.push(...mathRuns(token.slice(2, -2), formulaMode, undefined, formulaImages));
 		} else if (token.startsWith('\\[')) {
-			runs.push(...mathRuns(token.slice(2, -2), formulaMode));
+			runs.push(...mathRuns(token.slice(2, -2), formulaMode, undefined, formulaImages));
 		} else if (token.startsWith('$')) {
-			runs.push(...mathRuns(token.slice(1, -1), formulaMode));
+			runs.push(...mathRuns(token.slice(1, -1), formulaMode, undefined, formulaImages));
 		}
 
 		lastIndex = pattern.lastIndex;
@@ -260,22 +293,22 @@ function inlineRuns(text, runOptions, formulaMode) {
 	return runs.length ? runs : [new TextRun({ text: '' })];
 }
 
-function paragraphForBlock(block, layout, headingPrefix, formulaMode) {
+function paragraphForBlock(block, layout, headingPrefix, formulaMode, formulaImages) {
 	if (block.type === 'heading') {
 		return new Paragraph({
-			children: inlineRuns(`${headingPrefix || ''}${block.content}`, layout.heading, formulaMode),
+			children: inlineRuns(`${headingPrefix || ''}${block.content}`, layout.heading, formulaMode, formulaImages),
 			heading: headingLevels[Math.max(0, Math.min((block.level || 1) - 1, 2))],
 			spacing: { before: layout.headingSpacing, after: layout.headingSpacing },
 		});
 	}
 
 	if (block.type === 'paragraph') {
-		return new Paragraph({ children: inlineRuns(block.content, layout.body, formulaMode), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
+		return new Paragraph({ children: inlineRuns(block.content, layout.body, formulaMode, formulaImages), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
 	}
 
 	if (block.type === 'quote') {
 		return new Paragraph({
-			children: inlineRuns(block.content, layout.body, formulaMode),
+			children: inlineRuns(block.content, layout.body, formulaMode, formulaImages),
 			indent: { left: 720 },
 			border: {
 				left: {
@@ -300,11 +333,11 @@ function paragraphForBlock(block, layout, headingPrefix, formulaMode) {
 		]);
 	}
 
-	if (block.type === 'formula') return formulaParagraphs(block.content, 0, layout, formulaMode);
+	if (block.type === 'formula') return formulaParagraphs(block.content, 0, layout, formulaMode, formulaImages);
 
 	if (block.type === 'list') {
 		return (block.content || []).map((item, index) => {
-			const runs = inlineRuns(item, layout.body, formulaMode);
+			const runs = inlineRuns(item, layout.body, formulaMode, formulaImages);
 			if (block.ordered) {
 				runs.unshift(new TextRun({ text: `${index + 1}. ` }));
 			}
@@ -316,12 +349,12 @@ function paragraphForBlock(block, layout, headingPrefix, formulaMode) {
 		});
 	}
 
-	return new Paragraph({ children: inlineRuns(block.content || '', layout.body, formulaMode), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
+	return new Paragraph({ children: inlineRuns(block.content || '', layout.body, formulaMode, formulaImages), spacing: { after: layout.bodySpacing, line: layout.bodySpacing } });
 }
 
-function formulaParagraphs(latex, number, layout, formulaMode) {
+function formulaParagraphs(latex, number, layout, formulaMode, formulaImages) {
 	const formula = new Paragraph({
-		children: mathRuns(latex, formulaMode, number ? 'hide' : 'show'),
+		children: mathRuns(latex, formulaMode, number ? 'hide' : 'show', formulaImages),
 		alignment: AlignmentType.CENTER,
 		spacing: { after: layout.bodySpacing },
 	});
@@ -392,7 +425,9 @@ exports.main = async (event) => {
 	const layout = layoutFor(d.templateId);
 	// 云函数也以兼容格式为默认值，避免旧客户端或第三方调用在微信预览中
 	// 生成不可见的 OMML 公式。只有显式请求 editable 时才生成可编辑公式对象。
-	const formulaMode = event.formulaMode === 'editable' ? 'editable' : event.formulaMode === 'image' ? 'image' : 'compatible';
+	const formulaMode = ['editable', 'image'].includes(event.formulaMode) ? event.formulaMode : 'compatible';
+	// 仅手机图片模式初始化渲染器；桌面可编辑公式完全不受图片依赖影响。
+	const formulaImages = formulaMode === 'image' ? await buildFormulaImages(blocks) : null;
 	if (exportOptions.cover) {
 		children.push(
 			new Paragraph({ children: [new TextRun({ text: d.title || '未命名文档', font: layout.heading.font, size: 44, bold: true })], alignment: AlignmentType.CENTER, spacing: { before: 1800, after: 360 } }),
@@ -408,16 +443,14 @@ exports.main = async (event) => {
 			children.push(
 				new Table({
 					width: { size: 100, widthType: WidthType.PERCENTAGE },
-					rows: block.content.map((row, rowIndex) => new TableRow({ children: row.map((cell) => new TableCell({ shading: rowIndex === 0 ? { fill: 'EDF3EE' } : undefined, children: [new Paragraph({ children: inlineRuns(String(cell), Object.assign({}, layout.body, rowIndex === 0 ? { bold: true } : {}), formulaMode), spacing: { line: layout.bodySpacing } })] })) })),
+					rows: block.content.map((row, rowIndex) => new TableRow({ children: row.map((cell) => new TableCell({ shading: rowIndex === 0 ? { fill: 'EDF3EE' } : undefined, children: [new Paragraph({ children: inlineRuns(String(cell), Object.assign({}, layout.body, rowIndex === 0 ? { bold: true } : {}), formulaMode, formulaImages), spacing: { line: layout.bodySpacing } })] })) })),
 				})
 			);
 		} else if (block.type === 'formula') {
 			formulaNumber += 1;
-			children.push(formulaMode === 'image'
-				? await imageFormulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout)
-				: formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout, formulaMode));
+			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout, formulaMode, formulaImages));
 		} else {
-			const paragraph = paragraphForBlock(block, layout, nextHeadingPrefix(block, layout, headingLevels), formulaMode);
+			const paragraph = paragraphForBlock(block, layout, nextHeadingPrefix(block, layout, headingLevels), formulaMode, formulaImages);
 			children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
 		}
 	}

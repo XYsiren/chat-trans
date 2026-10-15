@@ -20,7 +20,7 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
-		// 微信手机端文档预览器不显示 OMML；手机端将独立公式渲染为图片，
+		// 微信手机端文档预览器不显示 OMML；手机端将公式排版为 PNG 嵌入，
 		// Windows/macOS 端保留 Word 原生可编辑公式。
 		const system = wx.getSystemInfoSync();
 		const isDesktop = system.platform === 'windows' || system.platform === 'mac';

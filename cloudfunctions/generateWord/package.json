@@ -1,1 +1,11 @@
-{"name":"generateWord","version":"1.2.0","main":"index.js","dependencies":{"wx-server-sdk":"~2.4.0","docx":"^9.8.1","mathjax-full":"^3.2.2","sharp":"^0.32.6"}}
+{
+  "name": "generateWord",
+  "version": "1.2.0",
+  "main": "index.js",
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
+    "docx": "^9.8.1",
+    "mathjax-full": "^3.2.2",
+    "wx-server-sdk": "~2.4.0"
+  }
+}
