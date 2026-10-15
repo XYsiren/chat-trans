@@ -20,9 +20,8 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
-		// wx.openDocument 的预览器（包括 Windows/macOS 微信）不会可靠渲染
-		// Word 的 OMML 公式对象。统一使用可预览的文本公式，避免桌面端丢公式。
-		const formulaMode = 'compatible';
+		// 生成 Word 原生 OMML 公式，确保在 Word/WPS 中可编辑且保留分式、根号等结构。
+		const formulaMode = 'editable';
 		this.setData({ state: 'generating', message: '正在应用版式…' });
 
 		if (!wx.cloud) {
