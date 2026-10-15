@@ -84,28 +84,20 @@ Page({
 				if (!response.tempFilePath) {
 					throw new Error('文件下载失败');
 				}
-				const savedPath = `${wx.env.USER_DATA_PATH}/${this.data.name}`;
-				return new Promise((resolve) => {
-					wx.getFileSystemManager().saveFile({
+				return new Promise((resolve, reject) => {
+					// 小程序环境不提供系统级“另存为”路径选择器；不再打开微信预览，
+					// 直接把文件保存到小程序本地文件区。
+					wx.saveFile({
 						tempFilePath: response.tempFilePath,
-						filePath: savedPath,
-						success: (result) => resolve(result.savedFilePath || savedPath),
-						// 文件名保存失败时仍可打开临时文件，避免阻断用户下载。
-						fail: () => resolve(response.tempFilePath),
+						success: resolve,
+						fail: reject,
 					});
 				});
 			})
-			.then((filePath) => {
+			.then(() => {
 				wx.hideLoading();
-				wx.openDocument({
-					filePath,
-					showMenu: true,
-					success: () => {
-						metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId });
-						wx.showToast({ title: '已打开文件', icon: 'success' });
-					},
-					fail: (error) => wx.showModal({ title: '打开失败', content: error.errMsg || error.message || '请重新下载后再试', showCancel: false }),
-				});
+				metrics.track('document_delivery_completed', { draftId: this.data.draft.id, attemptId: this.data.draft.activeAttemptId });
+				wx.showToast({ title: '文件已保存', icon: 'success' });
 			})
 			.catch((error) => {
 				wx.hideLoading();
