@@ -54,6 +54,9 @@ function layoutFor(templateId) {
 function formulaText(latex, tagMode) {
 	// 保留 array/aligned 中的真实换行：手机端虽不能渲染 OMML，但仍应按行展示。
 	let value = String(latex || '').replace(/\r\n?/g, '\n').trim();
+	// 部分复制来源会把 \begin、\end、\tag 写成双反斜杠；这不是数组的换行，
+	// 先还原命令本身，避免手机预览泄露原始控制标签。
+	value = value.replace(/\\\\(?=(?:begin|end|tag)\b)/g, '\\');
 	// 必须在 \le 等短命令转换前移除尺寸控制命令，否则 \left 会被误识别为 \le + ft。
 	value = value.replace(/\\left|\\right|\\bigg|\\Bigg|\\big(?!cup|cap)|\\Big/g, '');
 	// 展开常见的嵌套分式。有限循环可避免不受控的正则替换。
