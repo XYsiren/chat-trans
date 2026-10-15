@@ -51,7 +51,7 @@ function layoutFor(templateId) {
  * 作为 LaTeX 解析失败时的兜底文本。正常路径必须写入 OMML，才能在 Word/WPS
  * 中以公式对象打开并继续编辑。
  */
-function formulaText(latex) {
+function formulaText(latex, tagMode) {
 	let value = String(latex || '').replace(/\r\n?/g, ' ').trim();
 	// 必须在 \le 等短命令转换前移除尺寸控制命令，否则 \left 会被误识别为 \le + ft。
 	value = value.replace(/\\left|\\right|\\bigg|\\Bigg|\\big(?!cup|cap)|\\Big/g, '');
@@ -62,7 +62,7 @@ function formulaText(latex) {
 			.replace(/\\(?:dfrac|tfrac|cfrac|frac)\{((?:[^{}]|\{[^{}]*\})*)\}\{((?:[^{}]|\{[^{}]*\})*)\}/g, '($1)/($2)')
 			.replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
 			.replace(/\\mathcal\{L\}/g, 'ℒ')
-			.replace(/\\(?:text|mathrm|mathbf|mathit|mathcal|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
+			.replace(/\\(?:text|mathrm|mathbf|mathit|mathcal|mathbb|boldsymbol|operatorname)\{([^{}]*)\}/g, '$1');
 		if (next === value) break;
 		value = next;
 	}
@@ -79,6 +79,18 @@ function formulaText(latex) {
 	];
 	commands.forEach(([from, to]) => { value = value.split(from).join(to); });
 	value = value
+		// 手机兼容模式必须去掉所有控制命令，避免微信预览把 LaTeX 原文直接显示出来。
+		.replace(/\\(?:under|over)line\{((?:[^{}]|\{[^{}]*\})*)\}/g, '$1')
+		// 原始公式自带 \\tag 时，在未启用“显示公式编号”时仍应保留编号；
+		// 启用该选项则由右侧编号列统一绘制，避免出现两个编号。
+		// 同时兼容部分识别结果省略花括号而得到的 `\\tag1`。
+		.replace(/\\tag\s*(?:\{([^{}]*)\}|(\d+))/g, (_, bracedTag, bareTag) => {
+			const tag = bracedTag || bareTag;
+			return tagMode === 'hide' ? '' : ` (${tag})`;
+		})
+		.replace(/\\quad|\\qquad/g, ' ')
+		.replace(/\\(?:min|max|cos|sin|tan|cot|log|ln|exp)\b/g, (match) => match.slice(1))
+		.replace(/\\Gamma/g, 'Γ').replace(/\\Delta/g, 'Δ').replace(/\\Theta/g, 'Θ').replace(/\\Psi/g, 'Ψ').replace(/\\Omega/g, 'Ω')
 		.replace(/\\(?:widehat|hat)\s*\{?\s*([A-Za-z])\s*\}?/g, '$1̂')
 		.replace(/\\[,!;:\s]+/g, ' ')
 		.replace(/\\([{}])/g, '$1');
@@ -107,10 +119,10 @@ function editableMath(latex) {
 	}
 }
 
-function mathRuns(latex, formulaMode) {
+function mathRuns(latex, formulaMode, tagMode) {
 	// 微信手机端预览器不渲染 OMML；改用常规文字 Run 才能保证可见。
 	if (formulaMode === 'compatible') {
-		return [new TextRun({ text: formulaText(latex), font: 'Cambria Math' })];
+		return [new TextRun({ text: formulaText(latex, tagMode), font: 'Cambria Math' })];
 	}
 	return editableMath(latex);
 }
@@ -241,7 +253,7 @@ function paragraphForBlock(block, layout, headingPrefix, formulaMode) {
 
 function formulaParagraphs(latex, number, layout, formulaMode) {
 	const formula = new Paragraph({
-		children: mathRuns(latex, formulaMode),
+		children: mathRuns(latex, formulaMode, number ? 'hide' : 'show'),
 		alignment: AlignmentType.CENTER,
 		spacing: { after: layout.bodySpacing },
 	});
