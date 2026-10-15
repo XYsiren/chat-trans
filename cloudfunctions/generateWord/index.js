@@ -60,7 +60,12 @@ async function getFormulaRenderer() {
 				ex: 8,
 				containerWidth: 80 * 16,
 			});
-			const svg = adaptor.outerHTML(node);
+			// MathJax 返回的是 <mjx-container><svg>...</svg></mjx-container>。
+			// resvg 只接受以 <svg> 为根的 XML，不能把外层容器传进去。
+			const wrappedSvg = adaptor.outerHTML(node);
+			const svgMatch = wrappedSvg.match(/<svg\b[\s\S]*<\/svg>/i);
+			if (!svgMatch) throw new Error('公式排版结果中没有 SVG 图像');
+			const svg = svgMatch[0];
 			const rendered = new Resvg(svg, {
 				background: 'rgba(255,255,255,0)',
 				fitTo: { mode: 'zoom', value: 2 },
