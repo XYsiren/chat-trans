@@ -15,7 +15,24 @@ Page({
 			return;
 		}
 		this.setData({ draft, name: fileName(draft) });
-		this.generate();
+		const system = wx.getSystemInfoSync();
+		const isDesktop = system.platform === 'windows' || system.platform === 'mac';
+		if (isDesktop) {
+			this.generate();
+			return;
+		}
+		// 微信手机端的 Word 预览器不能稳定绘制 Office Math；在生成前讲清楚
+		// 导出能力，避免用户误以为手机端可得到可编辑的独立公式对象。
+		wx.showModal({
+			title: '手机端公式说明',
+			content: '本次将使用兼容公式文本，保证手机和电脑端均可查看。若需在 Word/WPS 中获得独立、可编辑的公式，请在 Windows 或 macOS 微信端导出。',
+			confirmText: '继续生成',
+			cancelText: '返回编辑',
+			success: (result) => {
+				if (result.confirm) this.generate();
+				else wx.navigateBack();
+			},
+		});
 	},
 
 	generate() {
