@@ -52,7 +52,8 @@ function layoutFor(templateId) {
  * 中以公式对象打开并继续编辑。
  */
 function formulaText(latex, tagMode) {
-	let value = String(latex || '').replace(/\r\n?/g, ' ').trim();
+	// 保留 array/aligned 中的真实换行：手机端虽不能渲染 OMML，但仍应按行展示。
+	let value = String(latex || '').replace(/\r\n?/g, '\n').trim();
 	// 必须在 \le 等短命令转换前移除尺寸控制命令，否则 \left 会被误识别为 \le + ft。
 	value = value.replace(/\\left|\\right|\\bigg|\\Bigg|\\big(?!cup|cap)|\\Big/g, '');
 	// 展开常见的嵌套分式。有限循环可避免不受控的正则替换。
@@ -75,11 +76,18 @@ function formulaText(latex, tagMode) {
 		['\\pm', '±'], ['\\infty', '∞'], ['\\bigcup', '⋃'], ['\\bigcap', '⋂'], ['\\sum', '∑'], ['\\prod', '∏'], ['\\int', '∫'],
 		['\\forall', '∀'], ['\\exists', '∃'], ['\\emptyset', '∅'], ['\\notin', '∉'], ['\\in', '∈'], ['\\cup', '∪'], ['\\cap', '∩'],
 		['\\cdots', '⋯'], ['\\ldots', '…'], ['\\dots', '…'],
-		['\\alpha', 'α'], ['\\beta', 'β'], ['\\gamma', 'γ'], ['\\delta', 'δ'], ['\\theta', 'θ'],
+		['\\alpha', 'α'], ['\\beta', 'β'], ['\\gamma', 'γ'], ['\\delta', 'δ'], ['\\epsilon', 'ε'], ['\\varepsilon', 'ε'], ['\\zeta', 'ζ'], ['\\eta', 'η'], ['\\theta', 'θ'], ['\\vartheta', 'ϑ'],
+		['\\iota', 'ι'], ['\\kappa', 'κ'], ['\\lambda', 'λ'], ['\\mu', 'μ'], ['\\nu', 'ν'], ['\\xi', 'ξ'], ['\\pi', 'π'], ['\\rho', 'ρ'], ['\\sigma', 'σ'], ['\\tau', 'τ'], ['\\upsilon', 'υ'], ['\\phi', 'φ'], ['\\varphi', 'ϕ'], ['\\chi', 'χ'], ['\\psi', 'ψ'], ['\\omega', 'ω'],
+		['\\odot', '⊙'], ['\\partial', '∂'], ['\\nabla', '∇'], ['\\approx', '≈'], ['\\equiv', '≡'],
 	];
 	commands.forEach(([from, to]) => { value = value.split(from).join(to); });
 	value = value
 		// 手机兼容模式必须去掉所有控制命令，避免微信预览把 LaTeX 原文直接显示出来。
+		// array/aligned 的 `&` 是列对齐标记、`\\` 是行结束标记，转成普通 Word 换行。
+		.replace(/\\begin\{(?:array|aligned|align\*?|cases|matrix|pmatrix|bmatrix|vmatrix|Vmatrix)\}(?:\{[^{}]*\})?/g, '')
+		.replace(/\\end\{(?:array|aligned|align\*?|cases|matrix|pmatrix|bmatrix|vmatrix|Vmatrix)\}/g, '')
+		.replace(/\\\\(?:\[[^\]]*\])?/g, '\n')
+		.replace(/&/g, ' ')
 		.replace(/\\(?:under|over)line\{((?:[^{}]|\{[^{}]*\})*)\}/g, '$1')
 		// 原始公式自带 \\tag 时，在未启用“显示公式编号”时仍应保留编号；
 		// 启用该选项则由右侧编号列统一绘制，避免出现两个编号。
@@ -90,7 +98,7 @@ function formulaText(latex, tagMode) {
 		})
 		.replace(/\\quad|\\qquad/g, ' ')
 		.replace(/\\(?:min|max|cos|sin|tan|cot|log|ln|exp)\b/g, (match) => match.slice(1))
-		.replace(/\\Gamma/g, 'Γ').replace(/\\Delta/g, 'Δ').replace(/\\Theta/g, 'Θ').replace(/\\Psi/g, 'Ψ').replace(/\\Omega/g, 'Ω')
+		.replace(/\\Gamma/g, 'Γ').replace(/\\Delta/g, 'Δ').replace(/\\Theta/g, 'Θ').replace(/\\Lambda/g, 'Λ').replace(/\\Xi/g, 'Ξ').replace(/\\Pi/g, 'Π').replace(/\\Sigma/g, 'Σ').replace(/\\Phi/g, 'Φ').replace(/\\Psi/g, 'Ψ').replace(/\\Omega/g, 'Ω')
 		.replace(/\\(?:widehat|hat)\s*\{?\s*([A-Za-z])\s*\}?/g, '$1̂')
 		.replace(/\\[,!;:\s]+/g, ' ')
 		.replace(/\\([{}])/g, '$1');
@@ -100,7 +108,7 @@ function formulaText(latex, tagMode) {
 	value = value.replace(/\^\{([^{}]+)\}/g, (_, superscript) => `^(${superscript})`);
 	value = value.replace(/_([A-Za-z0-9])/g, (_, subscript) => `₍${subscript}₎`);
 	value = value.replace(/\^([A-Za-z0-9])/g, (_, superscript) => `^(${superscript})`);
-	return value.replace(/[{}]/g, '').replace(/\s+/g, ' ').trim() || '[空公式]';
+	return value.replace(/[{}]/g, '').split('\n').map((line) => line.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n') || '[空公式]';
 }
 
 function editableMath(latex) {
@@ -122,7 +130,8 @@ function editableMath(latex) {
 function mathRuns(latex, formulaMode, tagMode) {
 	// 微信手机端预览器不渲染 OMML；改用常规文字 Run 才能保证可见。
 	if (formulaMode === 'compatible') {
-		return [new TextRun({ text: formulaText(latex, tagMode), font: 'Cambria Math' })];
+		const lines = formulaText(latex, tagMode).split('\n');
+		return lines.map((line, index) => new TextRun({ text: line, font: 'Cambria Math', break: index || undefined }));
 	}
 	return editableMath(latex);
 }
