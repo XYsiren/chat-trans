@@ -66,7 +66,7 @@ function normalizeLatex(source) {
     .replace(/\r\n?/g, '\n')
 		// 聊天窗口常把 LaTeX 命令转义为 `\\frac`、`\\lambda`；数组的 `\\` 换行
 		// 后面通常不是字母，因此不会被这一规则误改。
-		.replace(/\\\\(?=[A-Za-z])/g, '\\')
+		.replace(/\\{2,}(?=[A-Za-z])/g, '\\')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\\cfrac\b/g, '\\dfrac')
     .replace(/\\mathnormal\b/g, '\\mathit')
@@ -83,7 +83,7 @@ function normalizeLatex(source) {
 
 function normalizeMathDelimiters(source) {
   // 从聊天窗口复制的 `\\(`、`\\[` 不是公式内容的一部分，而是被多转义了一次的分隔符。
-  return String(source == null ? '' : source).replace(/\\\\(?=[\[\]()])/g, '\\');
+	return String(source == null ? '' : source).replace(/\\{2,}(?=[\[\]()])/g, '\\');
 }
 
 function formulaPreview(latex) {

@@ -56,7 +56,14 @@ Page({
 			})
 			.catch((error) => {
 			metrics.track('word_export_failed', { draftId: draft.id, attemptId: draft.activeAttemptId });
-				this.setData({ state: 'failed', message: error.errMsg || error.message || '暂时无法生成文档，请检查网络后重试。' });
+				const rawMessage = error.errMsg || error.message || '';
+				const timedOut = error.errCode === -504003 || /timed out|TIME_LIMIT_EXCEEDED/i.test(rawMessage);
+				this.setData({
+					state: 'failed',
+					message: timedOut
+						? '公式图片渲染超时。请重新部署 generateWord，并确认云函数配置为：超时 20 秒、内存 256MB。'
+						: (rawMessage || '暂时无法生成文档，请检查网络后重试。'),
+				});
 			});
 	},
 

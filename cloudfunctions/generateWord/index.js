@@ -29,7 +29,7 @@ function latexForImage(latex) {
 		.replace(/\r\n?/g, '\n')
 		.trim()
 		// 从 Markdown/聊天窗口复制时，反斜杠常被额外转义一次。
-		.replace(/\\\\(?=[A-Za-z])/g, '\\');
+		.replace(/\\{2,}(?=[A-Za-z])/g, '\\');
 }
 
 async function getFormulaRenderer() {

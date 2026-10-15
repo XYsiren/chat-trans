@@ -7,5 +7,9 @@
     "docx": "^9.8.1",
     "mathjax-full": "^3.2.2",
     "wx-server-sdk": "~2.4.0"
+  },
+  "cloudfunction-config": {
+    "timeout": 20,
+    "memorySize": 256
   }
 }
