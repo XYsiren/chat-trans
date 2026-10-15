@@ -13,10 +13,25 @@ const {
 	WidthType,
 	PageBreak,
 	Header,
+	ImageRun,
 } = require('docx');
 const { Math: OfficeMath, MathRun, latexToMath } = require('docx/math');
+const { mathjax } = require('mathjax-full/js/mathjax.js');
+const { TeX } = require('mathjax-full/js/input/tex.js');
+const { SVG } = require('mathjax-full/js/output/svg.js');
+const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
+const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
+const { AllPackages } = require('mathjax-full/js/input/tex/AllPackages.js');
+const sharp = require('sharp');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+
+const mathAdaptor = liteAdaptor();
+RegisterHTMLHandler(mathAdaptor);
+const mathDocument = mathjax.document('', {
+	InputJax: new TeX({ packages: AllPackages }),
+	OutputJax: new SVG({ fontCache: 'none' }),
+});
 
 const headingLevels = [
 	HeadingLevel.HEADING_1,
@@ -132,11 +147,52 @@ function editableMath(latex) {
 
 function mathRuns(latex, formulaMode, tagMode) {
 	// 微信手机端预览器不渲染 OMML；改用常规文字 Run 才能保证可见。
-	if (formulaMode === 'compatible') {
+	if (formulaMode === 'compatible' || formulaMode === 'image') {
 		const lines = formulaText(latex, tagMode).split('\n');
 		return lines.map((line, index) => new TextRun({ text: line, font: 'Cambria Math', break: index || undefined }));
 	}
 	return editableMath(latex);
+}
+
+async function formulaImageRun(latex) {
+	const node = mathDocument.convert(String(latex || '').trim(), { display: true });
+	const markup = mathAdaptor.outerHTML(node);
+	const start = markup.indexOf('<svg');
+	const end = markup.lastIndexOf('</svg>');
+	if (start < 0 || end < 0) throw new Error('公式 SVG 生成失败');
+
+	const png = await sharp(Buffer.from(markup.slice(start, end + 6)), { density: 180 }).png().toBuffer();
+	const info = await sharp(png).metadata();
+	if (!info.width || !info.height) throw new Error('公式图片尺寸无效');
+	const scale = Math.min(1, 520 / info.width);
+	return new ImageRun({
+		data: png,
+		transformation: {
+			width: Math.max(1, Math.round(info.width * scale)),
+			height: Math.max(1, Math.round(info.height * scale)),
+		},
+	});
+}
+
+async function imageFormulaParagraphs(latex, number, layout) {
+	let children;
+	try {
+		children = [await formulaImageRun(latex)];
+	} catch (error) {
+		// 若个别公式无法渲染为图片，仍提供清理过的文本，绝不让手机端留空。
+		children = mathRuns(latex, 'compatible', number ? 'hide' : 'show');
+	}
+	const formula = new Paragraph({ children, alignment: AlignmentType.CENTER, spacing: { after: layout.bodySpacing } });
+	if (!number) return formula;
+	return new Table({
+		width: { size: 100, widthType: WidthType.PERCENTAGE },
+		borders: { top: { style: BorderStyle.NIL }, bottom: { style: BorderStyle.NIL }, left: { style: BorderStyle.NIL }, right: { style: BorderStyle.NIL }, insideHorizontal: { style: BorderStyle.NIL }, insideVertical: { style: BorderStyle.NIL } },
+		rows: [new TableRow({ children: [
+			new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph('')] }),
+			new TableCell({ width: { size: 70, type: WidthType.PERCENTAGE }, children: [formula] }),
+			new TableCell({ width: { size: 15, type: WidthType.PERCENTAGE }, children: [new Paragraph({ text: `(${number})`, alignment: AlignmentType.CENTER })] }),
+		] })],
+	});
 }
 
 function normalTextRun(text, options) {
@@ -336,7 +392,7 @@ exports.main = async (event) => {
 	const layout = layoutFor(d.templateId);
 	// 云函数也以兼容格式为默认值，避免旧客户端或第三方调用在微信预览中
 	// 生成不可见的 OMML 公式。只有显式请求 editable 时才生成可编辑公式对象。
-	const formulaMode = event.formulaMode === 'editable' ? 'editable' : 'compatible';
+	const formulaMode = event.formulaMode === 'editable' ? 'editable' : event.formulaMode === 'image' ? 'image' : 'compatible';
 	if (exportOptions.cover) {
 		children.push(
 			new Paragraph({ children: [new TextRun({ text: d.title || '未命名文档', font: layout.heading.font, size: 44, bold: true })], alignment: AlignmentType.CENTER, spacing: { before: 1800, after: 360 } }),
@@ -357,7 +413,9 @@ exports.main = async (event) => {
 			);
 		} else if (block.type === 'formula') {
 			formulaNumber += 1;
-			children.push(formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout, formulaMode));
+			children.push(formulaMode === 'image'
+				? await imageFormulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout)
+				: formulaParagraphs(block.content, exportOptions.formulaNumbers ? formulaNumber : 0, layout, formulaMode));
 		} else {
 			const paragraph = paragraphForBlock(block, layout, nextHeadingPrefix(block, layout, headingLevels), formulaMode);
 			children.push(...(Array.isArray(paragraph) ? paragraph : [paragraph]));
@@ -371,5 +429,5 @@ exports.main = async (event) => {
 	// 云端路径仍带时间戳以避免同名文档覆盖；只把友好的文件名返回给前端。
 	const cloudPath = `${openid}/${d.id}/${Date.now()}_${fileName}`;
 	const upload = await cloud.uploadFile({ cloudPath, fileContent: buffer });
-	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 4, formulaMode };
+	return { success: true, fileID: upload.fileID, fileName, generatorVersion: 5, formulaMode };
 };

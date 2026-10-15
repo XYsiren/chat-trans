@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { parseDocument, normalizeLatex, formulaPreview } = require('../miniprogram/utils/parser');
+const { parseDocument, normalizeLatex, formulaPreview, renderInline } = require('../miniprogram/utils/parser');
 
 const cases = [
 	{ name: '块级分式', input: '$$\n\\frac{a}{b}\\le t\n$$', types: ['formula'], formula: '\\frac{a}{b}\\le t', closed: true },
@@ -34,6 +34,7 @@ assert.strictEqual(formulaPreview('\\min C=\\sum_{i\\in S_G}(a_iP_{Gi}^2),\\tag{
 assert.strictEqual(formulaPreview('P_{Gi}-P_{Di}=\\Gamma(V,\\theta,z(G))\\quad(i,j\\in S_B),\\tag{2}'), 'P₍Gi₎-P₍Di₎=Γ(V,θ,z(G)) (i,j∈ S₍B₎), (2)');
 assert.strictEqual(formulaPreview('\\underline{P_{Gi}}\\le P_{Gi}\\le\\overline{P_{Gi}}\\quad(i\\in S_G),\\tag{4}'), 'P₍Gi₎≤ P₍Gi₎≤P₍Gi₎ (i∈ S₍G₎), (4)');
 assert.strictEqual(formulaPreview('\\mathcal{L}_{\\text{MSE}}=\\frac{1}{N}\\sum_{i=1}^{N}(y_i-\\hat y_i)^2'), 'ℒ₍MSE₎=(1)/(N)∑ᵢ₌₁⁽N⁾(yᵢ-ŷᵢ)²');
+assert.ok(renderInline('输入\\\\(5\\\\times5\\\\)') .includes('5×5'), '转义行内公式应渲染为可读内容');
 const table = parseDocument('| 名称 | 数值 |\n| --- | :---: |\n| alpha | 1 |')[0];
 assert.deepStrictEqual(table.content, [['名称', '数值'], ['alpha', '1']]);
 assert.strictEqual(table.alignments[1], 'center');

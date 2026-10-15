@@ -20,8 +20,11 @@ Page({
 
 	generate() {
 		const draft = this.data.draft;
-		// 所有端均生成独立的 Word 原生 OMML 公式块，保证 Word/WPS 可编辑。
-		const formulaMode = 'editable';
+		// 微信手机端文档预览器不显示 OMML；手机端将独立公式渲染为图片，
+		// Windows/macOS 端保留 Word 原生可编辑公式。
+		const system = wx.getSystemInfoSync();
+		const isDesktop = system.platform === 'windows' || system.platform === 'mac';
+		const formulaMode = isDesktop ? 'editable' : 'image';
 		this.setData({ state: 'generating', message: '正在应用版式…' });
 
 		if (!wx.cloud) {
@@ -43,7 +46,7 @@ Page({
 				if (!result.success) {
 					throw new Error(result.errMsg || result.message || '生成失败');
 				}
-				if (result.generatorVersion !== 4) {
+				if (result.generatorVersion !== 5) {
 					throw new Error('云函数尚未更新，请在微信开发者工具中重新部署 generateWord 后再导出。');
 				}
 				draft.status = 'exported';

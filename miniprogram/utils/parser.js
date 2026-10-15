@@ -81,6 +81,11 @@ function normalizeLatex(source) {
     .trim();
 }
 
+function normalizeMathDelimiters(source) {
+  // 从聊天窗口复制的 `\\(`、`\\[` 不是公式内容的一部分，而是被多转义了一次的分隔符。
+  return String(source == null ? '' : source).replace(/\\\\(?=[\[\]()])/g, '\\');
+}
+
 function formulaPreview(latex) {
   // `content` 始终保留 LaTeX；这里只生成小程序内的可读预览文本。
   // 小程序原生 rich-text 不具备 TeX 排版能力，不能把 LaTeX 原样直接展示给用户。
@@ -160,7 +165,7 @@ function formulaPreview(latex) {
 }
 
 function renderInline(source) {
-  const text = String(source == null ? '' : source);
+  const text = normalizeMathDelimiters(source);
   const token = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$(?!\s)(?:\\.|[^$\n])+?\$)/g;
   let result = ''; let cursor = 0; let match;
   while ((match = token.exec(text))) {
@@ -187,7 +192,7 @@ function formulaBlock(content, start, end, closed, delimiter) {
 function parseDocument(source) {
   // 从 Markdown/聊天窗口复制时，公式分隔符可能被转义成 `\\(`、`\\[`；
   // 只还原分隔符，保留公式内部 `\\` 的数组换行语义。
-  const input = String(source == null ? '' : source).replace(/\r\n?/g, '\n').replace(/\\\\(?=[\[\]()])/g, '\\');
+  const input = normalizeMathDelimiters(String(source == null ? '' : source).replace(/\r\n?/g, '\n'));
   const lines = input.split('\n');
   const offsets = []; let offset = 0;
   lines.forEach((line) => { offsets.push(offset); offset += line.length + 1; });
