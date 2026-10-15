@@ -14,6 +14,7 @@ const cases = [
 	{ name: '行内公式保留在段落', input: '设 $x_i\\in S$，则成立。', types: ['paragraph'] },
 	{ name: '未闭合块公式', input: '$$\n\\sqrt{x}', types: ['formula'], formula: '\\sqrt{x}', closed: false },
 	{ name: '标题与公式混排', input: '## 定义\n\n\\(L=\\{x\\mid x>0\\}\\)', types: ['heading', 'formula'], formula: 'L=\\{x\\mid x>0\\}', closed: true },
+	{ name: '连续行内公式不是未闭合块公式', input: '\\(S=1\\), \\(K=3\\)', types: ['paragraph'] },
 	{ name: '旧式兼容命令', input: '$$\\cfrac{1}{2}+{\\bf x}$$', types: ['formula'], formula: '\\dfrac{1}{2}+{\\mathbf{x}}', closed: true },
 	{ name: '集合量词公式', input: '$$\\forall i\\ne j, S_i\\cap S_j=\\emptyset$$', types: ['formula'], formula: '\\forall i\\ne j, S_i\\cap S_j=\\emptyset', closed: true },
 ];
@@ -35,6 +36,7 @@ assert.strictEqual(formulaPreview('P_{Gi}-P_{Di}=\\Gamma(V,\\theta,z(G))\\quad(i
 assert.strictEqual(formulaPreview('\\underline{P_{Gi}}\\le P_{Gi}\\le\\overline{P_{Gi}}\\quad(i\\in S_G),\\tag{4}'), 'P₍Gi₎≤ P₍Gi₎≤P₍Gi₎ (i∈ S₍G₎), (4)');
 assert.strictEqual(formulaPreview('\\mathcal{L}_{\\text{MSE}}=\\frac{1}{N}\\sum_{i=1}^{N}(y_i-\\hat y_i)^2'), 'ℒ₍MSE₎=(1)/(N)∑ᵢ₌₁⁽N⁾(yᵢ-ŷᵢ)²');
 assert.ok(renderInline('输入\\\\(5\\\\times5\\\\)') .includes('5×5'), '转义行内公式应渲染为可读内容');
+assert.ok(renderInline('\\(S=1\\), \\(K=3\\)').includes('S=1'), '连续行内公式应分别渲染');
 const table = parseDocument('| 名称 | 数值 |\n| --- | :---: |\n| alpha | 1 |')[0];
 assert.deepStrictEqual(table.content, [['名称', '数值'], ['alpha', '1']]);
 assert.strictEqual(table.alignments[1], 'center');

@@ -230,6 +230,12 @@ function parseDocument(source) {
       if (closeAt >= 0 && !afterOpen.slice(closeAt + close.length).trim()) {
         blocks.push(formulaBlock(afterOpen.slice(0, closeAt), start, blockEnd(i), true, open)); i += 1; continue;
       }
+      // `\\(S=1\\), \\(K=3\\)` 是含两个行内公式的普通段落，不能因为行首是
+      // `\\(` 就吞成一个未闭合的块公式。只有确实没有本行闭合符时才继续按多行公式读取。
+      if (closeAt >= 0) {
+        const rendered = renderInline(line);
+        blocks.push(make('paragraph', line, start, blockEnd(i), { rendered })); i += 1; continue;
+      }
       const rows = afterOpen ? [afterOpen] : []; const first = i; let closed = false; i += 1;
       while (i < lines.length) {
         const closeIndex = lines[i].indexOf(close);

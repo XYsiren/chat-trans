@@ -32,6 +32,13 @@ function latexForImage(latex) {
 		.replace(/\\{2,}(?=[A-Za-z])/g, '\\');
 }
 
+// MathJax 的 SVG 是 HTML 序列化结果；其中偶发的裸 `&`（例如辅助属性或
+// 外部扩展产生的文本）对浏览器尚可容忍，却不是合法 XML，resvg 会直接拒绝。
+// 保留已经正确编码的实体，只补齐裸字符，避免改变公式 SVG 的语义。
+function xmlSafeSvg(svg) {
+	return String(svg || '').replace(/&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)/g, '&amp;');
+}
+
 async function getFormulaRenderer() {
 	if (formulaRenderer) return formulaRenderer;
 	try {
@@ -65,7 +72,7 @@ async function getFormulaRenderer() {
 			const wrappedSvg = adaptor.outerHTML(node);
 			const svgMatch = wrappedSvg.match(/<svg\b[\s\S]*<\/svg>/i);
 			if (!svgMatch) throw new Error('公式排版结果中没有 SVG 图像');
-			const svg = svgMatch[0];
+			const svg = xmlSafeSvg(svgMatch[0]);
 			const rendered = new Resvg(svg, {
 				background: 'rgba(255,255,255,0)',
 				fitTo: { mode: 'zoom', value: 2 },
