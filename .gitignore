@@ -1,3 +1,10 @@
 node_modules/
 miniprogram/miniprogram_npm/
 /package-lock.json
+
+# Local WeChat Developer Tools settings and credentials
+project.private.config.json
+**/env.local.js
+.env
+.env.*
+!.env.example

@@ -44,8 +44,8 @@
     "swc": false,
     "disableSWC": true
   },
-  "appid": "wx3c229bd0fe2d51dd",
-  "projectname": "quickstart-wx-cloud",
+  "appid": "touristappid",
+  "projectname": "chat-trans",
   "libVersion": "2.20.1",
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
   "condition": {

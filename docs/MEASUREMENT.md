@@ -13,7 +13,7 @@ node tests/metrics.test.js
 
 新增解析规则时，必须先补充一条“此前会失败”的样例，再修改解析器；测试断言包括块类型、公式 LaTeX 原文和闭合状态。
 
-建议扩展到 100–200 条人工标注样本，并为每个样本补充 `expectedFormulaCount`、`expectedBlockTypes`、`expectedLatex`。公式块识别准确率可定义为：`类型与边界均正确的样本数 / 全部样本数`；若将每个公式块单独标注，则可同时计算 Precision、Recall 与 F1。
+扩展到 100–200 条人工标注样本，并为每个样本补充 `expectedFormulaCount`、`expectedBlockTypes`、`expectedLatex`。公式块识别准确率可定义为：`类型与边界均正确的样本数 / 全部样本数`；若将每个公式块单独标注，则可同时计算 Precision、Recall 与 F1。
 
 ## 事件与隐私
 
@@ -46,11 +46,3 @@ node tests/metrics.test.js
 - 端到端文档交付完成率 = 去重后的“成功打开 Word 的处理尝试数” / “成功开始处理的尝试数”。这比单纯导出成功率更接近真正交付。
 
 `tests/metrics.test.js` 包含去重和公式正确性断言。分析时以 `attemptId` 或 `suggestionId`/`repairId` 去重；不得直接按原始事件行数相除。
-
-## 简历写法
-
-完成至少一轮真实用户测试后，再填写具体数字。例如：
-
-> 构建 120 条 LaTeX 公式回归集与事件埋点体系，跟踪公式解析准确率、修复建议采纳率、误修复率及端到端 Word 交付完成率；基于错例迭代公式分隔符与兼容命令解析规则。
-
-请使用实际测试样本量和实际结果，避免写入未经验证的百分比。
