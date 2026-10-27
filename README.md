@@ -35,10 +35,6 @@
 └─ project.config.json      # 微信开发者工具项目配置
 ```
 
-## 本地配置
-
-公开的 `project.config.json` 使用 `touristappid` 占位值。请在本机被 Git 忽略的 `project.private.config.json` 中配置自己的小程序 AppID，并将 `miniprogram/env.local.example.js` 复制为 `miniprogram/env.local.js` 后填写云开发环境 ID。私有配置和本地环境文件不会提交到仓库。
-
 ## 当前能力说明
 
 - 小程序端公式预览以可读文本为主，不等同于完整的 TeX 排版。
